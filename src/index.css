@@ -91,6 +91,19 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Inventory status colors */
+    --success: 142 71% 45%;
+    --success-foreground: 355.7 100% 97.3%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 48 96% 89%;
+    --danger: 0 84% 60%;
+    --danger-foreground: 0 0% 98%;
+
+    /* Company branding - teal theme from the image */
+    --company-primary: 175 100% 26%;
+    --company-primary-foreground: 0 0% 98%;
+    --company-secondary: 175 53% 44%;
   }
 }
 
