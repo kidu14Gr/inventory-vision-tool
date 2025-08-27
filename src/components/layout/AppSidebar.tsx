@@ -63,12 +63,12 @@ export function AppSidebar() {
         <div className="p-4 border-b border-company-secondary">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-white rounded flex items-center justify-center">
-              <span className="text-company-primary font-bold text-sm">ICT</span>
+              <span className="text-company-primary font-bold text-sm">SCM</span>
             </div>
             {!collapsed && (
               <div className="text-white">
-                <div className="text-sm font-medium">ICT</div>
-                <div className="text-xs opacity-80">NETWORKS</div>
+                <div className="text-sm font-medium">SCM</div>
+                <div className="text-xs opacity-80">Supply Chain</div>
               </div>
             )}
           </div>

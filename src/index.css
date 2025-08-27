@@ -101,9 +101,9 @@ All colors MUST be HSL.
     --danger-foreground: 0 0% 98%;
 
     /* Company branding - teal theme from the image */
-    --company-primary: 175 100% 26%;
+    --company-primary: 180 85% 25%;
     --company-primary-foreground: 0 0% 98%;
-    --company-secondary: 175 53% 44%;
+    --company-secondary: 180 85% 30%;
   }
 }
 

@@ -51,48 +51,39 @@ export function DemandPrediction({ selectedProject }: DemandPredictionProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {demandPredictions.map((item, index) => {
-          const needsReorder = item.currentStock < item.predictedAmount;
-          
-          return (
-            <div key={index} className="flex items-center justify-between p-3 rounded-lg border bg-card">
-              <div className="flex-1">
-                <div className="font-medium text-sm">{item.category}</div>
-                <div className="text-xs text-muted-foreground">{item.subcategory}</div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  Approval: {item.approvalTime}
-                </div>
-                {needsReorder && (
-                  <div className="flex items-center gap-1 text-xs text-destructive mt-1">
-                    <AlertTriangle className="h-3 w-3" />
-                    Reorder needed
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {demandPredictions.map((item, index) => {
+            const needsReorder = item.currentStock < item.predictedAmount;
+            
+            return (
+              <div key={index} className="flex items-center justify-between p-3 rounded-lg border bg-card">
+                <div className="flex-1">
+                  <div className="font-medium text-sm">{item.category}</div>
+                  <div className="text-xs text-muted-foreground">{item.subcategory}</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Approval: {item.approvalTime}
                   </div>
-                )}
-              </div>
-              <div className="text-right">
-                <Badge 
-                  variant="secondary" 
-                  className={`${needsReorder ? 'bg-destructive/10 text-destructive border-destructive/20' : 'bg-success/10 text-success border-success/20'}`}
-                >
-                  +{item.predictedAmount} units
-                </Badge>
-                <div className="text-xs text-muted-foreground mt-1">
-                  Stock: {item.currentStock}
+                  {needsReorder && (
+                    <div className="flex items-center gap-1 text-xs text-destructive mt-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      Reorder needed
+                    </div>
+                  )}
+                </div>
+                <div className="text-right">
+                  <Badge 
+                    variant="secondary" 
+                    className={`${needsReorder ? 'bg-destructive/10 text-destructive border-destructive/20' : 'bg-success/10 text-success border-success/20'}`}
+                  >
+                    +{item.predictedAmount} units
+                  </Badge>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Stock: {item.currentStock}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-        
-        <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-          <div className="text-sm font-medium mb-2">Prediction Accuracy</div>
-          <div className="text-xs text-muted-foreground mb-2">Based on historical data and project patterns</div>
-          <div className="flex items-center gap-2">
-            <div className="flex-1 bg-background rounded-full h-2">
-              <div className="bg-success h-2 rounded-full" style={{ width: "89%" }}></div>
-            </div>
-            <span className="text-sm font-medium">89%</span>
-          </div>
+            );
+          })}
         </div>
       </CardContent>
     </Card>
