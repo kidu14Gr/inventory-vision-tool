@@ -19,13 +19,14 @@ const Inventory = () => {
 
       {/* Navigation Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="items">Items</TabsTrigger>
           <TabsTrigger value="tools">Tools</TabsTrigger>
           <TabsTrigger value="assets">Assets</TabsTrigger>
           <TabsTrigger value="project">Project</TabsTrigger>
           <TabsTrigger value="request">Request</TabsTrigger>
           <TabsTrigger value="on-use">On Use</TabsTrigger>
+          <TabsTrigger value="ai-predictions">AI Predictions</TabsTrigger>
         </TabsList>
 
         <TabsContent value="items" className="space-y-4">
@@ -38,16 +39,6 @@ const Inventory = () => {
               <Button variant="outline" size="sm">
                 <FileText className="h-4 w-4 mr-2" />
                 General Report
-              </Button>
-            </div>
-            
-            <div className="flex items-center gap-4">
-              <Button 
-                variant={activeTab === "ai-predictions" ? "default" : "outline"} 
-                size="sm"
-                onClick={() => setActiveTab("ai-predictions")}
-              >
-                AI Predictions
               </Button>
               <Button variant="outline" size="sm">
                 GRN report

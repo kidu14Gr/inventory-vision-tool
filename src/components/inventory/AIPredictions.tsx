@@ -4,7 +4,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { RefreshCw, BarChart3 } from "lucide-react";
 import { PredictionSummary } from "./PredictionSummary";
-import { PredictionTable } from "./PredictionTable";
 import { DemandPrediction } from "./DemandPrediction";
 
 export function AIPredictions() {
@@ -52,17 +51,9 @@ export function AIPredictions() {
       {/* Summary Cards */}
       <PredictionSummary selectedProject={selectedProject} />
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Prediction Table */}
-        <div className="xl:col-span-2">
-          <PredictionTable selectedProject={selectedProject} />
-        </div>
-
-        {/* Demand Prediction Sidebar */}
-        <div className="xl:col-span-1">
-          <DemandPrediction />
-        </div>
+      {/* Demand Prediction */}
+      <div className="max-w-md">
+        <DemandPrediction selectedProject={selectedProject} />
       </div>
     </div>
   );
