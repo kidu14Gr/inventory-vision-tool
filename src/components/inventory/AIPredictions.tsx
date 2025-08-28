@@ -55,9 +55,6 @@ export function AIPredictions() {
       {/* Summary Cards */}
       <PredictionSummary selectedProject={selectedProject} />
 
-      {/* Smart Stock Analysis */}
-      <SmartStockAnalysis selectedProject={selectedProject} />
-
       {/* Layout Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Demand Prediction - spans 2 columns */}
@@ -83,6 +80,9 @@ export function AIPredictions() {
           </Card>
         </div>
       </div>
+
+      {/* Smart Stock Analysis Dashboard */}
+      <SmartStockAnalysis selectedProject={selectedProject} />
     </div>
   );
 }
