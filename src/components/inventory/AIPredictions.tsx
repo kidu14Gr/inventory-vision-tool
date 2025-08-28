@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw, Brain } from "lucide-react";
 import { PredictionSummary } from "./PredictionSummary";
 import { DemandPrediction } from "./DemandPrediction";
+import { SmartStockAnalysis } from "./SmartStockAnalysis";
 
 export function AIPredictions() {
   const [selectedProject, setSelectedProject] = useState("all-projects");
@@ -53,6 +54,9 @@ export function AIPredictions() {
 
       {/* Summary Cards */}
       <PredictionSummary selectedProject={selectedProject} />
+
+      {/* Smart Stock Analysis */}
+      <SmartStockAnalysis selectedProject={selectedProject} />
 
       {/* Layout Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
