@@ -3,76 +3,86 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Search, Filter, Download, BarChart3, AlertTriangle, CheckCircle, Clock } from "lucide-react";
+import { Search, Filter, Download, BarChart3, AlertTriangle, CheckCircle, Package2, MapPin } from "lucide-react";
 
 interface SmartStockAnalysisProps {
   selectedProject: string;
 }
 
-const stockAnalysisData = [
-  {
-    item: "Network Cables",
-    subcategory: "Cat6 Ethernet",
-    currentStock: 150,
-    optimalStock: 200,
-    status: "sufficient",
-    location: "Warehouse A",
-    lastUpdated: "2 hours ago",
-    value: "$4,500"
-  },
-  {
-    item: "Power Supplies",
-    subcategory: "UPS 1500VA",
-    currentStock: 45,
-    optimalStock: 60,
-    status: "low",
-    location: "Warehouse B",
-    lastUpdated: "1 hour ago",
-    value: "$13,500"
-  },
-  {
-    item: "Storage Drives",
-    subcategory: "SSD 1TB",
-    currentStock: 8,
-    optimalStock: 25,
-    status: "critical",
-    location: "Warehouse A",
-    lastUpdated: "30 min ago",
-    value: "$1,200"
-  },
-  {
-    item: "Server Memory",
-    subcategory: "32GB DDR4",
-    currentStock: 20,
-    optimalStock: 15,
-    status: "sufficient",
-    location: "Warehouse C",
-    lastUpdated: "4 hours ago",
-    value: "$6,000"
-  },
-  {
-    item: "Switches",
-    subcategory: "24-Port Gigabit",
-    currentStock: 32,
-    optimalStock: 40,
-    status: "sufficient",
-    location: "Warehouse B",
-    lastUpdated: "1 hour ago",
-    value: "$9,600"
-  },
-  {
-    item: "Routers",
-    subcategory: "Enterprise WiFi",
-    currentStock: 5,
-    optimalStock: 15,
-    status: "critical",
-    location: "Warehouse A",
-    lastUpdated: "45 min ago",
-    value: "$2,500"
+const getProjectInventoryData = (project: string) => {
+  const allInventory = [
+    {
+      item: "Network Cables",
+      subcategory: "Cat6 Ethernet",
+      currentStock: 150,
+      status: "sufficient",
+      location: "Warehouse A",
+      lastUpdated: "2 hours ago",
+      value: "$4,500",
+      projects: ["all-projects", "network-expansion", "hq-office"]
+    },
+    {
+      item: "Power Supplies",
+      subcategory: "UPS 1500VA",
+      currentStock: 45,
+      status: "low",
+      location: "Warehouse B",
+      lastUpdated: "1 hour ago",
+      value: "$13,500",
+      projects: ["all-projects", "server-migration", "hq-office"]
+    },
+    {
+      item: "Storage Drives",
+      subcategory: "SSD 1TB",
+      currentStock: 8,
+      status: "critical",
+      location: "Warehouse A",
+      lastUpdated: "30 min ago",
+      value: "$1,200",
+      projects: ["all-projects", "server-migration"]
+    },
+    {
+      item: "Server Memory",
+      subcategory: "32GB DDR4",
+      currentStock: 20,
+      status: "sufficient",
+      location: "Warehouse C",
+      lastUpdated: "4 hours ago",
+      value: "$6,000",
+      projects: ["all-projects", "server-migration"]
+    },
+    {
+      item: "Switches",
+      subcategory: "24-Port Gigabit",
+      currentStock: 32,
+      status: "sufficient",
+      location: "Warehouse B",
+      lastUpdated: "1 hour ago",
+      value: "$9,600",
+      projects: ["all-projects", "network-expansion"]
+    },
+    {
+      item: "Routers",
+      subcategory: "Enterprise WiFi",
+      currentStock: 5,
+      status: "critical",
+      location: "Warehouse A",
+      lastUpdated: "45 min ago",
+      value: "$2,500",
+      projects: ["all-projects", "network-expansion", "hq-office"]
+    }
+  ];
+
+  if (project === "all-projects") {
+    return allInventory;
   }
-];
+  
+  return allInventory.filter(item => item.projects.includes(project));
+};
 
 export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps) {
+  const stockAnalysisData = getProjectInventoryData(selectedProject);
+  
   const criticalCount = stockAnalysisData.filter(item => item.status === "critical").length;
   const lowStockCount = stockAnalysisData.filter(item => item.status === "low").length;
   const sufficientCount = stockAnalysisData.filter(item => item.status === "sufficient").length;
@@ -84,83 +94,91 @@ export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps)
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
-            <BarChart3 className="h-5 w-5" />
+            <BarChart3 className="h-5 w-5 text-company-primary" />
             Smart Stock Analysis Dashboard
           </h2>
-          <p className="text-muted-foreground text-sm">Complete inventory overview across all items and locations</p>
+          <p className="text-muted-foreground text-sm">
+            {selectedProject === "all-projects" 
+              ? "Complete inventory overview across all items and locations"
+              : `Inventory analysis for ${selectedProject.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}`
+            }
+          </p>
         </div>
       </div>
 
-      {/* Dashboard Metrics */}
+      {/* Enhanced Dashboard Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="border-l-4 border-l-destructive">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-destructive/10">
-                <AlertTriangle className="h-4 w-4 text-destructive" />
-              </div>
+        <Card className="border-l-4 border-l-destructive bg-gradient-to-br from-destructive/5 to-destructive/10 hover:shadow-lg transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-bold text-destructive">{criticalCount}</p>
-                <p className="text-xs text-muted-foreground">Critical Items</p>
+                <p className="text-3xl font-bold text-destructive">{criticalCount}</p>
+                <p className="text-sm text-muted-foreground font-medium">Critical Items</p>
+              </div>
+              <div className="p-3 rounded-full bg-destructive/20">
+                <AlertTriangle className="h-6 w-6 text-destructive" />
               </div>
             </div>
           </CardContent>
         </Card>
         
-        <Card className="border-l-4 border-l-warning">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-warning/10">
-                <Clock className="h-4 w-4 text-warning" />
-              </div>
+        <Card className="border-l-4 border-l-warning bg-gradient-to-br from-warning/5 to-warning/10 hover:shadow-lg transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-bold text-warning">{lowStockCount}</p>
-                <p className="text-xs text-muted-foreground">Low Stock</p>
+                <p className="text-3xl font-bold text-warning">{lowStockCount}</p>
+                <p className="text-sm text-muted-foreground font-medium">Low Stock</p>
+              </div>
+              <div className="p-3 rounded-full bg-warning/20">
+                <Package2 className="h-6 w-6 text-warning" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-success">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-success/10">
-                <CheckCircle className="h-4 w-4 text-success" />
-              </div>
+        <Card className="border-l-4 border-l-success bg-gradient-to-br from-success/5 to-success/10 hover:shadow-lg transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-bold text-success">{sufficientCount}</p>
-                <p className="text-xs text-muted-foreground">Sufficient</p>
+                <p className="text-3xl font-bold text-success">{sufficientCount}</p>
+                <p className="text-sm text-muted-foreground font-medium">Sufficient</p>
+              </div>
+              <div className="p-3 rounded-full bg-success/20">
+                <CheckCircle className="h-6 w-6 text-success" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-primary">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-primary/10">
-                <BarChart3 className="h-4 w-4 text-primary" />
-              </div>
+        <Card className="border-l-4 border-l-company-primary bg-gradient-to-br from-company-primary/5 to-company-primary/10 hover:shadow-lg transition-all duration-300">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-bold text-primary">${totalValue.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">Total Value</p>
+                <p className="text-3xl font-bold text-company-primary">${totalValue.toLocaleString()}</p>
+                <p className="text-sm text-muted-foreground font-medium">Total Value</p>
+              </div>
+              <div className="p-3 rounded-full bg-company-primary/20">
+                <BarChart3 className="h-6 w-6 text-company-primary" />
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Analysis Table */}
-      <Card>
-        <CardHeader>
+      {/* Enhanced Analysis Table */}
+      <Card className="shadow-lg">
+        <CardHeader className="bg-gradient-to-r from-company-primary/5 to-company-primary/10 border-b">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            <CardTitle className="text-lg">Inventory Analysis</CardTitle>
+            <CardTitle className="text-xl font-semibold flex items-center gap-2">
+              <Package2 className="h-5 w-5 text-company-primary" />
+              Inventory Analysis
+            </CardTitle>
             <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
               <div className="relative flex-1 sm:flex-none">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input 
                   placeholder="Search items..." 
-                  className="pl-10 sm:w-64"
+                  className="pl-10 sm:w-64 border-company-primary/20 focus:border-company-primary"
                 />
               </div>
               <div className="flex gap-2">
@@ -186,11 +204,11 @@ export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps)
                     <SelectItem value="warehouse-c">Warehouse C</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className="hover:bg-company-primary/10">
                   <Filter className="h-4 w-4 mr-2" />
                   More Filters
                 </Button>
-                <Button variant="outline" size="sm" className="bg-company-primary text-company-primary-foreground hover:bg-company-primary/90">
+                <Button size="sm" className="bg-company-primary text-company-primary-foreground hover:bg-company-primary/90">
                   <Download className="h-4 w-4 mr-2" />
                   Export
                 </Button>
@@ -201,54 +219,53 @@ export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps)
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="border-b bg-muted/50">
+              <thead className="border-b bg-muted/30">
                 <tr>
-                  <th className="text-left p-4 font-medium text-sm">Item</th>
-                  <th className="text-left p-4 font-medium text-sm">Current/Optimal</th>
-                  <th className="text-left p-4 font-medium text-sm">Status</th>
-                  <th className="text-left p-4 font-medium text-sm">Location</th>
-                  <th className="text-left p-4 font-medium text-sm">Value</th>
-                  <th className="text-left p-4 font-medium text-sm">Last Updated</th>
+                  <th className="text-left p-4 font-semibold text-sm">Item</th>
+                  <th className="text-left p-4 font-semibold text-sm">Current Stock</th>
+                  <th className="text-left p-4 font-semibold text-sm">Status</th>
+                  <th className="text-left p-4 font-semibold text-sm">Location</th>
+                  <th className="text-left p-4 font-semibold text-sm">Value</th>
+                  <th className="text-left p-4 font-semibold text-sm">Last Updated</th>
                 </tr>
               </thead>
               <tbody>
                 {stockAnalysisData.map((item, index) => (
-                  <tr key={index} className="border-b hover:bg-muted/30 transition-colors">
+                  <tr key={index} className="border-b hover:bg-gradient-to-r hover:from-company-primary/5 hover:to-transparent transition-all duration-200">
                     <td className="p-4">
-                      <div>
-                        <div className="font-medium text-sm">{item.item}</div>
-                        <div className="text-xs text-muted-foreground">{item.subcategory}</div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-company-primary/10 flex items-center justify-center">
+                          <Package2 className="h-5 w-5 text-company-primary" />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-sm">{item.item}</div>
+                          <div className="text-xs text-muted-foreground">{item.subcategory}</div>
+                        </div>
                       </div>
                     </td>
                     <td className="p-4">
-                      <div className="text-sm">
-                        <span className="font-medium">{item.currentStock}</span>
-                        <span className="text-muted-foreground"> / {item.optimalStock}</span>
-                      </div>
-                      <div className="w-full bg-muted rounded-full h-1.5 mt-1">
-                        <div 
-                          className={`h-1.5 rounded-full ${
-                            item.status === "critical" ? "bg-destructive" :
-                            item.status === "low" ? "bg-warning" : "bg-success"
-                          }`}
-                          style={{ width: `${Math.min((item.currentStock / item.optimalStock) * 100, 100)}%` }}
-                        />
-                      </div>
+                      <div className="text-lg font-bold">{item.currentStock}</div>
+                      <div className="text-xs text-muted-foreground">units</div>
                     </td>
                     <td className="p-4">
-                      <Badge className={
+                      <Badge className={`${
                         item.status === "critical" 
-                          ? "bg-destructive/10 text-destructive border-destructive/20" :
+                          ? "bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive/20" :
                         item.status === "low"
-                          ? "bg-warning/10 text-warning border-warning/20"
-                          : "bg-success/10 text-success border-success/20"
-                      }>
-                        {item.status === "critical" ? "Critical" :
-                         item.status === "low" ? "Low Stock" : "Sufficient"}
+                          ? "bg-warning/10 text-warning border-warning/20 hover:bg-warning/20"
+                          : "bg-success/10 text-success border-success/20 hover:bg-success/20"
+                      } transition-colors duration-200`}>
+                        {item.status === "critical" ? "🔴 Critical" :
+                         item.status === "low" ? "🟡 Low Stock" : "🟢 Sufficient"}
                       </Badge>
                     </td>
-                    <td className="p-4 text-sm text-muted-foreground">{item.location}</td>
-                    <td className="p-4 text-sm font-medium">{item.value}</td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-2 text-sm">
+                        <MapPin className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-muted-foreground">{item.location}</span>
+                      </div>
+                    </td>
+                    <td className="p-4 text-sm font-semibold text-company-primary">{item.value}</td>
                     <td className="p-4 text-sm text-muted-foreground">{item.lastUpdated}</td>
                   </tr>
                 ))}

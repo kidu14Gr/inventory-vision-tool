@@ -39,31 +39,17 @@ export function PredictionSummary({ selectedProject }: PredictionSummaryProps) {
       </Card>
 
       {selectedProject !== "all-projects" && (
-        <>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Project Status
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="text-2xl font-bold text-success">Active</div>
-              <p className="text-xs text-muted-foreground">Planning phase</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Stock Coverage
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="text-2xl font-bold text-warning">78%</div>
-              <p className="text-xs text-muted-foreground">Items available</p>
-            </CardContent>
-          </Card>
-        </>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Project Status
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="text-2xl font-bold text-success">Active</div>
+            <p className="text-xs text-muted-foreground">Planning phase</p>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

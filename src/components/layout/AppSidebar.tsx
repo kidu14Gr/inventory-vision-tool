@@ -9,9 +9,7 @@ import {
   FileText,
   Package,
   BarChart3,
-  Settings,
-  Brain,
-  TrendingUp
+  Settings
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
@@ -40,10 +38,6 @@ const mainMenuItems = [
   { title: "Reports", url: "/reports", icon: BarChart3 },
 ];
 
-const intelligenceItems = [
-  { title: "AI Predictions", url: "/ai-predictions", icon: Brain },
-  { title: "Demand Forecast", url: "/demand-forecast", icon: TrendingUp },
-];
 
 export function AppSidebar() {
   const { state } = useSidebar();
@@ -82,27 +76,6 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {mainMenuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink to={item.url} className={getNavClassName}>
-                      <item.icon className="h-4 w-4" />
-                      {!collapsed && <span className="text-sm">{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* AI Intelligence Section */}
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-white/80 text-xs uppercase tracking-wider px-4 py-2">
-            AI Intelligence
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {intelligenceItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink to={item.url} className={getNavClassName}>
