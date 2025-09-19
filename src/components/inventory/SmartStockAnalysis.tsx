@@ -108,7 +108,11 @@ const getProjectInventoryData = (project: string) => {
 
 export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps) {
   const [viewType, setViewType] = useState<"amount" | "quantity">("amount");
-  const stockAnalysisData = getProjectInventoryData(selectedProject);
+  const [inventoryProject, setInventoryProject] = useState(selectedProject);
+  const [analyticsProject, setAnalyticsProject] = useState(selectedProject);
+  
+  const stockAnalysisData = getProjectInventoryData(inventoryProject);
+  const analyticsData = getProjectInventoryData(analyticsProject);
   
   // Calculate metrics based on selected view type (amount or quantity)
   const getCurrentStock = (item: any) => viewType === "amount" ? item.amount : item.quantity;
@@ -118,15 +122,22 @@ export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps)
   const sufficientCount = stockAnalysisData.filter(item => item.status === "sufficient").length;
   const totalValue = stockAnalysisData.reduce((sum, item) => sum + parseInt(item.value.replace(/[$,]/g, "")), 0);
 
-  // Calculate pie chart data
-  const totalRequested = stockAnalysisData.reduce((sum, item) => sum + item.requested, 0);
-  const totalConsumed = stockAnalysisData.reduce((sum, item) => sum + item.consumed, 0);
-  const totalReturned = stockAnalysisData.reduce((sum, item) => sum + item.returned, 0);
+  // Calculate pie chart data from analytics project
+  const totalRequested = analyticsData.reduce((sum, item) => sum + item.requested, 0);
+  const totalConsumed = analyticsData.reduce((sum, item) => sum + item.consumed, 0);
+  const totalReturned = analyticsData.reduce((sum, item) => sum + item.returned, 0);
 
   const pieChartData = [
     { name: "Requested", value: totalRequested, color: "#3b82f6" },
     { name: "Consumed", value: totalConsumed, color: "#ef4444" },
     { name: "Returned", value: totalReturned, color: "#10b981" }
+  ];
+
+  const projectOptions = [
+    { value: "all-projects", label: "All Projects" },
+    { value: "network-expansion", label: "Network Expansion" },
+    { value: "server-migration", label: "Server Migration" },
+    { value: "hq-office", label: "HQ Office" }
   ];
 
   return (
@@ -216,34 +227,46 @@ export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps)
                 <Package2 className="h-5 w-5 text-company-primary" />
                 Inventory Analysis
               </CardTitle>
-              <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                <div className="relative flex-1 sm:flex-none">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                  <Input 
-                    placeholder="Search items..." 
-                    className="pl-10 sm:w-48 border-company-primary/20 focus:border-company-primary"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Select value={viewType} onValueChange={(value: "amount" | "quantity") => setViewType(value)}>
-                    <SelectTrigger className="w-36">
-                      <SelectValue />
+                <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                  <Select value={inventoryProject} onValueChange={setInventoryProject}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue placeholder="Select project" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="amount">Available Stock</SelectItem>
-                      <SelectItem value="quantity">Total Stock</SelectItem>
+                      {projectOptions.map((project) => (
+                        <SelectItem key={project.value} value={project.value}>
+                          {project.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
-                  <Button variant="outline" size="sm" className="hover:bg-company-primary/10">
-                    <Filter className="h-4 w-4 mr-2" />
-                    Filter
-                  </Button>
-                  <Button size="sm" className="bg-company-primary text-company-primary-foreground hover:bg-company-primary/90">
-                    <Download className="h-4 w-4 mr-2" />
-                    Export
-                  </Button>
+                  <div className="relative flex-1 sm:flex-none">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                    <Input 
+                      placeholder="Search items..." 
+                      className="pl-10 sm:w-48 border-company-primary/20 focus:border-company-primary"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Select value={viewType} onValueChange={(value: "amount" | "quantity") => setViewType(value)}>
+                      <SelectTrigger className="w-36">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="amount">Available Stock</SelectItem>
+                        <SelectItem value="quantity">Total Stock</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" size="sm" className="hover:bg-company-primary/10">
+                      <Filter className="h-4 w-4 mr-2" />
+                      Filter
+                    </Button>
+                    <Button size="sm" className="bg-company-primary text-company-primary-foreground hover:bg-company-primary/90">
+                      <Download className="h-4 w-4 mr-2" />
+                      Export
+                    </Button>
+                  </div>
                 </div>
-              </div>
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -308,10 +331,24 @@ export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps)
         {/* Usage Analytics Pie Chart */}
         <Card className="shadow-lg">
           <CardHeader className="bg-gradient-to-r from-company-primary/5 to-company-primary/10 border-b">
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-company-primary" />
-              Usage Analytics
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-company-primary" />
+                Usage Analytics
+              </CardTitle>
+              <Select value={analyticsProject} onValueChange={setAnalyticsProject}>
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="Project" />
+                </SelectTrigger>
+                <SelectContent>
+                  {projectOptions.map((project) => (
+                    <SelectItem key={project.value} value={project.value}>
+                      {project.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </CardHeader>
           <CardContent className="p-6">
             <div className="h-64">
