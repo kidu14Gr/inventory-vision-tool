@@ -47,17 +47,17 @@ export function ChatBot() {
       {!isOpen && (
         <Button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg bg-company-primary hover:bg-company-primary/90"
+          className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg bg-blue-600 hover:bg-blue-700 z-50"
           size="icon"
         >
-          <MessageCircle className="h-6 w-6" />
+          <MessageCircle className="h-6 w-6 text-white" />
         </Button>
       )}
 
       {/* Chat Window */}
       {isOpen && (
-        <Card className="fixed bottom-6 right-6 w-96 h-[500px] shadow-2xl flex flex-col">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 bg-company-primary text-company-primary-foreground">
+        <Card className="fixed bottom-6 right-6 w-96 h-[500px] shadow-2xl flex flex-col z-50">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 bg-blue-600 text-white">
             <CardTitle className="text-lg">Chat Assistant</CardTitle>
             <Button
               variant="ghost"
@@ -65,7 +65,7 @@ export function ChatBot() {
               onClick={() => setIsOpen(false)}
               className="h-8 w-8 hover:bg-white/20"
             >
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4 text-white" />
             </Button>
           </CardHeader>
           <CardContent className="flex-1 flex flex-col p-0">
@@ -79,8 +79,8 @@ export function ChatBot() {
                     <div
                       className={`max-w-[80%] rounded-lg p-3 ${
                         message.sender === "user"
-                          ? "bg-company-primary text-company-primary-foreground"
-                          : "bg-muted"
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-200 text-gray-800"
                       }`}
                     >
                       <p className="text-sm">{message.text}</p>
@@ -89,7 +89,7 @@ export function ChatBot() {
                 ))}
               </div>
             </ScrollArea>
-            <div className="p-4 border-t">
+            <div className="p-4 border-t border-gray-300">
               <div className="flex gap-2">
                 <Input
                   placeholder="Type your message..."
@@ -97,7 +97,7 @@ export function ChatBot() {
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyPress={(e) => e.key === "Enter" && handleSend()}
                 />
-                <Button size="icon" onClick={handleSend}>
+                <Button size="icon" onClick={handleSend} className="bg-blue-600 hover:bg-blue-700 text-white">
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
