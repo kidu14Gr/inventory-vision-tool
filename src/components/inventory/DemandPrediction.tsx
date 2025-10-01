@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { TrendingUp } from "lucide-react";
 
 interface DemandPredictionProps {
@@ -72,7 +73,6 @@ export function DemandPrediction({ selectedProject }: DemandPredictionProps) {
             <Select value={selectedItem} onValueChange={(value) => {
               setSelectedItem(value);
               setPredictedAmount(null);
-              setTimeout(handlePredict, 500);
             }}>
               <SelectTrigger>
                 <SelectValue placeholder="Select item" />
@@ -87,6 +87,14 @@ export function DemandPrediction({ selectedProject }: DemandPredictionProps) {
             </Select>
           </div>
         </div>
+
+        <Button 
+          onClick={handlePredict} 
+          disabled={!selectedItem}
+          className="w-full md:w-auto"
+        >
+          Predict
+        </Button>
 
         {predictedAmount !== null && selectedItem && (
           <div className="mt-6 p-4 rounded-lg border bg-gradient-to-br from-company-primary/5 to-company-primary/10">

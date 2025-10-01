@@ -191,6 +191,15 @@ export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps)
                       ))}
                     </SelectContent>
                   </Select>
+                  <Select value={viewType} onValueChange={(value: "amount" | "quantity") => setViewType(value)}>
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="amount">Amount</SelectItem>
+                      <SelectItem value="quantity">Quantity</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Button size="sm" className="bg-company-primary text-company-primary-foreground hover:bg-company-primary/90">
                     <Download className="h-4 w-4 mr-2" />
                     Export
