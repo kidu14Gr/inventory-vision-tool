@@ -1,47 +1,46 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, AlertTriangle } from "lucide-react";
+import { TrendingUp } from "lucide-react";
 
 interface DemandPredictionProps {
   selectedProject: string;
 }
 
-const demandPredictions = [
-  {
-    category: "Network Cables",
-    subcategory: "Cat6 Ethernet",
-    predictedAmount: 25,
-    currentStock: 150,
-    approvalTime: "3-5 days",
-    trendType: "increase" as const,
-  },
-  {
-    category: "Power Supplies", 
-    subcategory: "UPS 1500VA",
-    predictedAmount: 12,
-    currentStock: 45,
-    approvalTime: "1-2 days",
-    trendType: "increase" as const,
-  },
-  {
-    category: "Storage Drives",
-    subcategory: "SSD 1TB", 
-    predictedAmount: 18,
-    currentStock: 8,
-    approvalTime: "5-7 days",
-    trendType: "increase" as const,
-  },
-  {
-    category: "Server Memory",
-    subcategory: "32GB DDR4",
-    predictedAmount: 8,
-    currentStock: 20,
-    approvalTime: "2-3 days",
-    trendType: "increase" as const,
-  },
+const allItems = [
+  { name: "Network Cables - Cat6 Ethernet", project: "network-expansion" },
+  { name: "Power Supplies - UPS 1500VA", project: "server-migration" },
+  { name: "Storage Drives - SSD 1TB", project: "server-migration" },
+  { name: "Server Memory - 32GB DDR4", project: "server-migration" },
+  { name: "Switches - 24-Port Gigabit", project: "network-expansion" },
+  { name: "Routers - Enterprise WiFi", project: "hq-office" },
+];
+
+const projectOptions = [
+  { value: "all-projects", label: "All Projects" },
+  { value: "network-expansion", label: "Network Expansion" },
+  { value: "server-migration", label: "Server Migration" },
+  { value: "hq-office", label: "HQ Office" }
 ];
 
 export function DemandPrediction({ selectedProject }: DemandPredictionProps) {
+  const [selectedPredictionProject, setSelectedPredictionProject] = useState("all-projects");
+  const [selectedItem, setSelectedItem] = useState("");
+  const [predictedAmount, setPredictedAmount] = useState<number | null>(null);
+
+  const filteredItems = selectedPredictionProject === "all-projects" 
+    ? allItems 
+    : allItems.filter(item => item.project === selectedPredictionProject);
+
+  const handlePredict = () => {
+    if (selectedItem) {
+      // Simulate AI prediction
+      const predicted = Math.floor(Math.random() * 50) + 10;
+      setPredictedAmount(predicted);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -52,39 +51,56 @@ export function DemandPrediction({ selectedProject }: DemandPredictionProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {demandPredictions.map((item, index) => {
-            const needsReorder = item.currentStock < item.predictedAmount;
-            
-            return (
-              <div key={index} className="flex items-center justify-between p-3 rounded-lg border bg-card">
-                <div className="flex-1">
-                  <div className="font-medium text-sm">{item.category}</div>
-                  <div className="text-xs text-muted-foreground">{item.subcategory}</div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Approval: {item.approvalTime}
-                  </div>
-                  {needsReorder && (
-                    <div className="flex items-center gap-1 text-xs text-destructive mt-1">
-                      <AlertTriangle className="h-3 w-3" />
-                      Reorder needed
-                    </div>
-                  )}
-                </div>
-                <div className="text-right">
-                  <Badge 
-                    variant="secondary" 
-                    className={`${needsReorder ? 'bg-destructive/10 text-destructive border-destructive/20' : 'bg-success/10 text-success border-success/20'}`}
-                  >
-                    +{item.predictedAmount} units
-                  </Badge>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Stock: {item.currentStock}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Select Project</label>
+            <Select value={selectedPredictionProject} onValueChange={setSelectedPredictionProject}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select project" />
+              </SelectTrigger>
+              <SelectContent>
+                {projectOptions.map((project) => (
+                  <SelectItem key={project.value} value={project.value}>
+                    {project.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Select Item</label>
+            <Select value={selectedItem} onValueChange={(value) => {
+              setSelectedItem(value);
+              setPredictedAmount(null);
+              setTimeout(handlePredict, 500);
+            }}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select item" />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredItems.map((item) => (
+                  <SelectItem key={item.name} value={item.name}>
+                    {item.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
+
+        {predictedAmount !== null && selectedItem && (
+          <div className="mt-6 p-4 rounded-lg border bg-gradient-to-br from-company-primary/5 to-company-primary/10">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Predicted Amount Needed</p>
+                <p className="text-sm font-medium mt-1">{selectedItem}</p>
+              </div>
+              <Badge className="text-xl px-4 py-2 bg-company-primary text-company-primary-foreground">
+                {predictedAmount} units
+              </Badge>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
