@@ -36,9 +36,19 @@ export function DemandPrediction({ selectedProject }: DemandPredictionProps) {
 
   const handlePredict = () => {
     if (selectedItem) {
-      // Simulate AI prediction
-      const predicted = Math.floor(Math.random() * 50) + 10;
-      setPredictedAmount(predicted);
+      (async () => {
+        const ML_API_URL = (import.meta.env.VITE_ML_API_URL as string) || "http://localhost:8001";
+        try {
+          const payload = { project_name: selectedPredictionProject, item_name: selectedItem, requested_date: new Date().toISOString().slice(0,10), in_use: 1 };
+          const res = await fetch(`${ML_API_URL.replace(/\/+$/, "")}/predict`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+          if (!res.ok) throw new Error('ML API error');
+          const body = await res.json();
+          setPredictedAmount(body.predicted_quantity ?? null);
+        } catch (e) {
+          console.warn('Prediction failed', e);
+          setPredictedAmount(null);
+        }
+      })();
     }
   };
 

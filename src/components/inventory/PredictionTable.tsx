@@ -11,67 +11,33 @@ interface PredictionTableProps {
   selectedProject: string;
 }
 
-const predictionData = [
-  {
-    id: 1,
-    itemName: "Network Cables",
-    category: "Cat6 Ethernet",
-    currentStock: 150,
-    predictedDemand: 200,
-    confidence: 92,
-    estimatedApproval: "3-5 days",
-    status: "shortage",
-    unitPrice: 25.50,
-  },
-  {
-    id: 2,
-    itemName: "Power Supplies", 
-    category: "UPS 1500VA",
-    currentStock: 45,
-    predictedDemand: 12,
-    confidence: 88,
-    estimatedApproval: "1-2 days",
-    status: "sufficient",
-    unitPrice: 350.00,
-  },
-  {
-    id: 3,
-    itemName: "Storage Drives",
-    category: "SSD 1TB",
-    currentStock: 8,
-    predictedDemand: 25,
-    confidence: 95,
-    estimatedApproval: "5-7 days",
-    status: "shortage",
-    unitPrice: 120.00,
-  },
-  {
-    id: 4,
-    itemName: "Server RAM",
-    category: "32GB DDR4",
-    currentStock: 20,
-    predictedDemand: 18,
-    confidence: 87,
-    estimatedApproval: "2-3 days",
-    status: "near-shortage",
-    unitPrice: 280.00,
-  },
-  {
-    id: 5,
-    itemName: "Fiber Optic Cables",
-    category: "Single Mode 100m",
-    currentStock: 75,
-    predictedDemand: 30,
-    confidence: 90,
-    estimatedApproval: "1-2 days",
-    status: "sufficient",
-    unitPrice: 45.00,
-  },
+// We'll fetch/compute predicted demand using the ML API when requested.
+const ML_API_URL = (import.meta.env.VITE_ML_API_URL as string) || "http://localhost:8001";
+
+type PredictionItem = {
+  id: number | string;
+  itemName: string;
+  category?: string;
+  currentStock?: number;
+  predictedDemand?: number | null;
+  confidence?: number | null;
+  estimatedApproval?: string | null;
+  status?: string;
+  unitPrice?: number;
+};
+
+// Default demo list of items (used only when no data exists); kept small
+const defaultItems: PredictionItem[] = [
+  { id: 1, itemName: "Network Cables", category: "Cat6 Ethernet", currentStock: 150, unitPrice: 25.5 },
+  { id: 2, itemName: "Power Supplies", category: "UPS 1500VA", currentStock: 45, unitPrice: 350 },
+  { id: 3, itemName: "Storage Drives", category: "SSD 1TB", currentStock: 8, unitPrice: 120 },
 ];
 
 export function PredictionTable({ selectedProject }: PredictionTableProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [items, setItems] = useState<PredictionItem[]>(defaultItems);
+  const [predictingFor, setPredictingFor] = useState<number | string | null>(null);
 
   const getStatusBadge = (status: string, currentStock: number, predictedDemand: number) => {
     if (status === "shortage") {
@@ -110,12 +76,35 @@ export function PredictionTable({ selectedProject }: PredictionTableProps) {
     return null;
   };
 
-  const filteredData = predictionData.filter(item => {
+  const filteredData = items.filter(item => {
     const matchesSearch = item.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.category.toLowerCase().includes(searchTerm.toLowerCase());
+                         (item.category ?? "").toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || item.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  async function callPredictionApi(project_name: string, item_name: string) {
+    try {
+      const payload = {
+        project_name,
+        item_name,
+        requested_date: new Date().toISOString().slice(0, 10),
+        in_use: 1,
+      };
+      const res = await fetch(`${ML_API_URL.replace(/\/+$/, "")}/predict`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(`ML API error ${res.status}`);
+      const body = await res.json();
+      // Expecting { predicted_quantity: number }
+      return body.predicted_quantity ?? null;
+    } catch (e) {
+      console.warn("Prediction API failed", e);
+      return null;
+    }
+  }
 
   return (
     <Card>
@@ -177,11 +166,11 @@ export function PredictionTable({ selectedProject }: PredictionTableProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredData.map((item) => (
-              <TableRow key={item.id}>
-                <TableCell>
-                  {getStatusBadge(item.status, item.currentStock, item.predictedDemand)}
-                </TableCell>
+              {filteredData.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell>
+                    {getStatusBadge(item.status ?? "sufficient", item.currentStock ?? 0, item.predictedDemand ?? 0)}
+                  </TableCell>
                 <TableCell>
                   <div>
                     <div className="font-medium">{item.itemName}</div>
@@ -196,7 +185,7 @@ export function PredictionTable({ selectedProject }: PredictionTableProps) {
                   <div className="font-medium">{item.currentStock}</div>
                 </TableCell>
                 <TableCell>
-                  <div className="font-medium">{item.predictedDemand}</div>
+                  <div className="font-medium">{item.predictedDemand ?? "—"}</div>
                 </TableCell>
                 <TableCell>
                   <Badge variant="outline" className="bg-muted">
@@ -208,6 +197,16 @@ export function PredictionTable({ selectedProject }: PredictionTableProps) {
                 </TableCell>
                 <TableCell>
                   <div className="font-medium">${item.unitPrice}</div>
+                </TableCell>
+                <TableCell>
+                  <Button size="sm" onClick={async () => {
+                    setPredictingFor(item.id);
+                    const predicted = await callPredictionApi(selectedProject || "", item.itemName);
+                    setPredictingFor(null);
+                    setItems((prev) => prev.map(i => i.id === item.id ? { ...i, predictedDemand: predicted, status: (i.currentStock ?? 0) < (predicted ?? 0) ? 'shortage' : 'sufficient', confidence: predicted ? 85 : null } : i));
+                  }} disabled={predictingFor === item.id}>
+                    {predictingFor === item.id ? 'Predicting...' : 'Predict'}
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}

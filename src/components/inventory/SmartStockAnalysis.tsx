@@ -41,6 +41,42 @@ export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps)
   const fetchInventoryData = async () => {
     setLoading(true);
     try {
+      // Try Kafka API first
+      const KAFKA_API_URL = (import.meta.env.VITE_KAFKA_API_URL as string) || "http://localhost:5000";
+      const kafkaPayload = {
+        topic: "scm_inventory",
+        group_id: `smartstock_frontend_${inventoryProject}`,
+        limit: 1000,
+        auto_offset_reset: "earliest",
+      };
+
+      try {
+        const res = await fetch(`${KAFKA_API_URL.replace(/\/+$/, "")}/consume`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(kafkaPayload),
+        });
+        if (res.ok) {
+          const body = await res.json();
+          const msgs = Array.isArray(body?.messages) ? body.messages : [];
+          const values = msgs.map((m: any) => {
+            let v = m?.value ?? m;
+            if (typeof v === "string") {
+              try { v = JSON.parse(v); } catch (_) { v = { raw_value: v }; }
+            }
+            return v;
+          });
+          // Map to expected inventory shape the UI uses
+          setInventoryData(values || []);
+          setSummary({ totalItems: (values || []).length, totalValue: (values || []).reduce((s: any, it: any) => s + (Number(it.amount ?? it.total_price ?? 0) || 0), 0) });
+          setLoading(false);
+          return;
+        }
+      } catch (e) {
+        console.warn("Kafka inventory fetch failed, falling back to Supabase", e);
+      }
+
+      // Fallback to supabase function
       const { data: inventoryResponse, error: inventoryError } = await supabase.functions.invoke(
         'get-inventory-data',
         { body: { project: inventoryProject } }
@@ -63,6 +99,36 @@ export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps)
 
   const fetchUsageData = async () => {
     try {
+      // Try Kafka API for usage/requests
+      const KAFKA_API_URL = (import.meta.env.VITE_KAFKA_API_URL as string) || "http://localhost:5000";
+      try {
+        const res = await fetch(`${KAFKA_API_URL.replace(/\/+$/, "")}/consume`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ topic: "scm_requests", group_id: `smartstock_usage_${analyticsProject}`, limit: 1000, auto_offset_reset: "earliest" }),
+        });
+        if (res.ok) {
+          const body = await res.json();
+          const msgs = Array.isArray(body?.messages) ? body.messages : [];
+          const values = msgs.map((m: any) => {
+            let v = m?.value ?? m;
+            if (typeof v === "string") {
+              try { v = JSON.parse(v); } catch (_) { v = { raw_value: v }; }
+            }
+            return v;
+          });
+          // Compute simple analytics
+          const requested = values.reduce((s: number, it: any) => s + (Number(it.requested_quantity ?? it.quantity ?? 0) || 0), 0);
+          const consumed = values.reduce((s: number, it: any) => s + (Number(it.consumed_amount ?? it.current_consumed_amount ?? 0) || 0), 0);
+          const returned = values.reduce((s: number, it: any) => s + (Number(it.returned_quantity ?? 0) || 0), 0);
+          setUsageData({ requested, consumed, returned });
+          setAlert(null);
+          return;
+        }
+      } catch (e) {
+        console.warn("Kafka usage fetch failed, falling back to Supabase", e);
+      }
+
       const { data: usageResponse, error: usageError } = await supabase.functions.invoke(
         'get-usage-data',
         { body: { project: analyticsProject } }
