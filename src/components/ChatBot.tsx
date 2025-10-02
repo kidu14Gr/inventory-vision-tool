@@ -18,7 +18,7 @@ export function ChatBot() {
   ]);
   const [inputValue, setInputValue] = useState("");
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!inputValue.trim()) return;
 
     const newMessage: Message = {
@@ -28,17 +28,36 @@ export function ChatBot() {
     };
 
     setMessages([...messages, newMessage]);
+    const question = inputValue;
     setInputValue("");
 
-    // Simulate bot response
-    setTimeout(() => {
+    try {
+      // Call the inventory chatbot API
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data, error } = await supabase.functions.invoke('inventory-chatbot', {
+        body: {
+          question,
+          requestsData: [] // You can pass actual requests data if needed
+        }
+      });
+
+      if (error) throw error;
+
       const botResponse: Message = {
         id: messages.length + 2,
-        text: "I'm here to help! This is a demo response.",
+        text: data.answer || "I couldn't generate a response.",
         sender: "bot"
       };
       setMessages(prev => [...prev, botResponse]);
-    }, 1000);
+    } catch (error) {
+      console.error("Error calling chatbot:", error);
+      const errorResponse: Message = {
+        id: messages.length + 2,
+        text: "Sorry, I encountered an error. Please try again.",
+        sender: "bot"
+      };
+      setMessages(prev => [...prev, errorResponse]);
+    }
   };
 
   return (

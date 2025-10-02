@@ -26,7 +26,7 @@ export function AIPredictions() {
             <Brain className="h-6 w-6" />
             AI Inventory Prediction
           </h1>
-          <p className="text-muted-foreground">Smart demand forecasting for All Projects</p>
+          <p className="text-muted-foreground">Smart demand forecasting and analysis</p>
         </div>
         <Button 
           variant="outline" 
@@ -39,9 +39,8 @@ export function AIPredictions() {
         </Button>
       </div>
 
-
-      {/* Demand Prediction */}
-      <DemandPrediction selectedProject={selectedProject} />
+      {/* Demand Prediction - Commented out for now */}
+      {/* <DemandPrediction selectedProject={selectedProject} /> */}
 
       {/* Smart Stock Analysis Dashboard */}
       <SmartStockAnalysis selectedProject={selectedProject} />
