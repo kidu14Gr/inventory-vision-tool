@@ -40,11 +40,11 @@ export function AIPredictions() {
       </div>
 
 
-      {/* Smart Stock Analysis Dashboard */}
-      <SmartStockAnalysis selectedProject={selectedProject} />
-
       {/* Demand Prediction */}
       <DemandPrediction selectedProject={selectedProject} />
+
+      {/* Smart Stock Analysis Dashboard */}
+      <SmartStockAnalysis selectedProject={selectedProject} />
     </div>
   );
 }

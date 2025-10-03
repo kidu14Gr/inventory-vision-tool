@@ -1,13 +1,1 @@
 project_id = "nlwkoubbbqwlqgapohpj"
-
-[functions.inventory-chatbot]
-verify_jwt = false
-
-[functions.get-inventory-data]
-verify_jwt = false
-
-[functions.get-usage-data]
-verify_jwt = false
-
-[functions.predict-demand]
-verify_jwt = false

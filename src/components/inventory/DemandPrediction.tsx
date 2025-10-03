@@ -4,8 +4,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TrendingUp } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
 
 interface DemandPredictionProps {
   selectedProject: string;
@@ -31,45 +29,16 @@ export function DemandPrediction({ selectedProject }: DemandPredictionProps) {
   const [selectedPredictionProject, setSelectedPredictionProject] = useState("all-projects");
   const [selectedItem, setSelectedItem] = useState("");
   const [predictedAmount, setPredictedAmount] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
 
   const filteredItems = selectedPredictionProject === "all-projects" 
     ? allItems 
     : allItems.filter(item => item.project === selectedPredictionProject);
 
-  const handlePredict = async () => {
-    if (!selectedItem) return;
-    
-    setIsLoading(true);
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      
-      const { data, error } = await supabase.functions.invoke('predict-demand', {
-        body: {
-          project_name: selectedPredictionProject === "all-projects" ? "Network Expansion" : selectedPredictionProject,
-          item_name: selectedItem,
-          requested_date: today,
-          in_use: 0
-        }
-      });
-
-      if (error) throw error;
-
-      if (data?.predicted_quantity) {
-        setPredictedAmount(Math.round(data.predicted_quantity));
-      } else {
-        throw new Error('No prediction received');
-      }
-    } catch (error) {
-      console.error('Prediction error:', error);
-      toast({
-        title: "Prediction Failed",
-        description: error instanceof Error ? error.message : "Failed to get prediction from ML API",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
+  const handlePredict = () => {
+    if (selectedItem) {
+      // Simulate AI prediction
+      const predicted = Math.floor(Math.random() * 50) + 10;
+      setPredictedAmount(predicted);
     }
   };
 
@@ -121,10 +90,10 @@ export function DemandPrediction({ selectedProject }: DemandPredictionProps) {
 
         <Button 
           onClick={handlePredict} 
-          disabled={!selectedItem || isLoading}
+          disabled={!selectedItem}
           className="w-full md:w-auto"
         >
-          {isLoading ? "Predicting..." : "Predict"}
+          Predict
         </Button>
 
         {predictedAmount !== null && selectedItem && (
