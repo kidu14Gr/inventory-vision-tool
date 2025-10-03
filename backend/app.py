@@ -1,11 +1,8 @@
 import os
-import json
-import time
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException
-from kafka import KafkaConsumer
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import requests
@@ -17,14 +14,12 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
-TOPIC_REQUESTS = "scm_requests"
-TOPIC_INVENTORY = "scm_inventory"
-MAX_MESSAGES = 5000
-ML_API_URL = os.getenv("ML_API_URL", "http://scm_ml-api:8001")
+DATA_DIR = "/app/data"
+INVENTORY_FILE = os.path.join(DATA_DIR, "combined_all.csv")
+REQUESTS_FILE = os.path.join(DATA_DIR, "combined_requested.csv")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-app = FastAPI(title="SCM Kafka API", version="1.1")
+app = FastAPI(title="SCM API", version="1.1")
 
 # Allow frontend to call this API (adjust origins in production)
 app.add_middleware(
@@ -35,78 +30,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------------- Kafka consumer cache ----------------
-consumers = {}
+# ---------------- Data loading functions ----------------
 
-def get_consumer(topic):
-    if topic not in consumers:
-        consumers[topic] = KafkaConsumer(
-            topic,
-            bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS.split(","),
-            value_deserializer=lambda x: json.loads(x.decode('utf-8')),
-            auto_offset_reset="earliest",
-            enable_auto_commit=True,
-            group_id=f"fastapi_{topic}_{int(time.time())}"
-        )
-    return consumers[topic]
-
-def fetch_data(topic, batch_size=1000):
-    consumer = get_consumer(topic)
-    messages = consumer.poll(timeout_ms=2000, max_records=batch_size)
-    data = []
-    for _, msgs in messages.items():
-        for msg in msgs:
-            data.append(msg.value)
-    return data
-
-
-# ---------------- Prediction models / ML API wrapper
-class PredictRequest(BaseModel):
-    project_name: str
-    item_name: str
-    requested_date: Optional[str] = None
-    in_use: Optional[int] = 1
-
-
-@app.post("/predict")
-def predict(req: PredictRequest):
-    """Proxy to ML API if available, otherwise fall back to a simple heuristic using Kafka history."""
-    payload = req.dict()
+def load_inventory_data():
     try:
-        # Try calling external ML API
-        resp = requests.post(f"{ML_API_URL}/predict", json=payload, timeout=10)
-        if resp.status_code == 200:
-            return resp.json()
-        else:
-            logger.warning(f"ML API returned {resp.status_code}: {resp.text}")
+        df = pd.read_csv(INVENTORY_FILE)
+        logger.info(f"Loaded inventory data with {len(df)} rows")
+        return df
     except Exception as e:
-        logger.warning(f"Failed to call ML API: {e}")
+        logger.error(f"Error loading inventory data: {e}")
+        return pd.DataFrame()
 
-    # Fallback: simple heuristic based on recent average of requested_quantity
-    data = fetch_data(TOPIC_REQUESTS, batch_size=MAX_MESSAGES)
-    df = pd.DataFrame(data)
-    if df.empty:
-        return {"predicted_quantity": None, "reason": "no_data"}
-    if "requested_project_name" in df.columns:
-        df["project_display"] = df["requested_project_name"].fillna("").astype(str).str.strip()
-    else:
-        df["project_display"] = df.get("project_display", "")
-
+def load_requests_data():
     try:
-        df["requested_date"] = pd.to_datetime(df.get("requested_date", None), errors="coerce")
-        cutoff = datetime.now() - pd.Timedelta(days=30)
-        recent = df[(df["project_display"] == req.project_name) & (df["requested_date"] >= cutoff)]
-        if recent.empty:
-            recent = df[df["project_display"] == req.project_name]
-        if recent.empty:
-            # global fallback
-            recent = df
-        avg = recent.get("requested_quantity", pd.Series(dtype=float)).astype(float).mean()
-        predicted = float(avg) if not pd.isna(avg) else None
-        return {"predicted_quantity": predicted, "reason": "heuristic_fallback"}
+        df = pd.read_csv(REQUESTS_FILE)
+        logger.info(f"Loaded requests data with {len(df)} rows")
+        return df
     except Exception as e:
-        logger.error(f"Prediction fallback failed: {e}")
-        return {"predicted_quantity": None, "reason": "error"}
+        logger.error(f"Error loading requests data: {e}")
+        return pd.DataFrame()
+
+
+
+
+
 
 
 # ---------------- Chat (Gemini) endpoint
@@ -136,8 +83,7 @@ def chat_endpoint(req: ChatRequest):
 
     # Local fallback: simple canned reply or short analysis
     # For a better reply, we can fetch recent requests and run the same local analysis
-    data = fetch_data(TOPIC_REQUESTS, batch_size=MAX_MESSAGES)
-    df = pd.DataFrame(data)
+    df = load_requests_data()
     if not df.empty:
         # simple insight: top items
         top = df.get("item_name", pd.Series()).value_counts().head(5).to_dict()
@@ -199,42 +145,100 @@ def health():
 # ---------------- Inventory endpoint ----------------
 @app.get("/inventory")
 def get_inventory(project: str = "All Projects", view: str = "Quantity"):
-    data = fetch_data(TOPIC_INVENTORY, MAX_MESSAGES)
-    df = pd.DataFrame(data)
+    df = load_inventory_data()
+    if df.empty:
+        return []
+    # Assume columns: item_name, quantity, amount, department_id or similar
+    df = ensure_column(df, "quantity")
+    df = ensure_column(df, "amount")
     if "department_id" in df.columns:
         df["project_display"] = df["department_id"].fillna("").astype(str).str.strip()
     else:
-        df["project_display"] = df.get("project_display", "")
-    df = ensure_column(df, "quantity")
-    df = ensure_column(df, "amount")
+        df["project_display"] = "All Projects"
     if project != "All Projects":
-        df = df[df["project_display"]==project]
-    display_df = prepare_inventory_display(df, view)
-    return display_df.to_dict(orient="records")
+        df = df[df["project_display"] == project]
+    # Aggregate by item
+    agg_df = df.groupby("item_name").agg({
+        'quantity': 'sum',
+        'amount': 'sum'
+    }).reset_index()
+    status_field = 'amount' if view == "Amount" else 'quantity'
+    def stock_status(row):
+        if row[status_field] <= 5:
+            return "Critical"
+        elif row[status_field] <= 20:
+            return "Low Stock"
+        else:
+            return "Sufficient"
+    agg_df['Status'] = agg_df.apply(stock_status, axis=1)
+    return agg_df.to_dict(orient="records")
 
 # ---------------- Requests endpoint ----------------
 @app.get("/requests")
 def get_requests(project: str = "All Projects"):
-    data = fetch_data(TOPIC_REQUESTS, MAX_MESSAGES)
-    df = pd.DataFrame(data)
+    df = load_requests_data()
+    if df.empty:
+        return []
+    # Assume columns: item_name, requested_quantity, requested_date, requested_project_name
     if "requested_project_name" in df.columns:
         df["project_display"] = df["requested_project_name"].fillna("").astype(str).str.strip()
     else:
-        df["project_display"] = df.get("project_display", "")
+        df["project_display"] = "All Projects"
     if project != "All Projects":
-        df = df[df["project_display"]==project]
+        df = df[df["project_display"] == project]
     return df.to_dict(orient="records")
 
 # ---------------- Transaction aggregation ----------------
 @app.get("/transactions")
 def get_transactions(project: str = "All Projects"):
-    requests_data = fetch_data(TOPIC_REQUESTS, MAX_MESSAGES)
-    df = pd.DataFrame(requests_data)
+    df = load_requests_data()  # Assuming transactions from requests data
+    if df.empty:
+        return []
     if "requested_project_name" in df.columns:
         df["project_display"] = df["requested_project_name"].fillna("").astype(str).str.strip()
     else:
-        df["project_display"] = df.get("project_display", "")
+        df["project_display"] = "All Projects"
     if project != "All Projects":
-        df = df[df["project_display"]==project]
-    agg_df = aggregate_transactions(df)
+        df = df[df["project_display"] == project]
+    # Aggregate for transactions
+    agg_df = df.groupby("item_name").agg({
+        'requested_quantity': 'sum',
+        'consumed_amount': 'sum',
+        'returned_quantity': 'sum'
+    }).reset_index()
     return agg_df.to_dict(orient="records")
+
+@app.get("/demand")
+def get_demand(project: str = "All Projects", weeks: int = 4):
+    df = load_requests_data()
+    if df.empty:
+        return []
+    if "requested_project_name" in df.columns:
+        df["project_display"] = df["requested_project_name"].fillna("").astype(str).str.strip()
+    else:
+        df["project_display"] = "All Projects"
+    if project != "All Projects":
+        df = df[df["project_display"] == project]
+    if "requested_date" not in df.columns or "item_name" not in df.columns or "requested_quantity" not in df.columns:
+        return []
+    df["requested_date"] = pd.to_datetime(df["requested_date"], errors="coerce")
+    df = df.dropna(subset=["requested_date"])
+    # Calculate average weekly demand per item
+    df["week"] = df["requested_date"].dt.to_period("W")
+    weekly_demand = df.groupby(["item_name", "week"])["requested_quantity"].sum().reset_index()
+    avg_demand = weekly_demand.groupby("item_name")["requested_quantity"].mean().reset_index()
+    avg_demand.rename(columns={"requested_quantity": "avg_weekly_demand"}, inplace=True)
+    # Predict for next weeks
+    predictions = []
+    start_date = datetime.now()
+    for _, row in avg_demand.iterrows():
+        item = row["item_name"]
+        avg = row["avg_weekly_demand"]
+        for i in range(1, weeks + 1):
+            pred_date = start_date + timedelta(weeks=i)
+            predictions.append({
+                "item_name": item,
+                "predicted_date": pred_date.strftime("%Y-%m-%d"),
+                "predicted_quantity": round(avg, 2)
+            })
+    return predictions

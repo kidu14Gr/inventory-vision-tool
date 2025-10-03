@@ -32,16 +32,20 @@ export function ChatBot() {
     setInputValue("");
 
     try {
-      // Call the inventory chatbot API
-      const { supabase } = await import("@/integrations/supabase/client");
-      const { data, error } = await supabase.functions.invoke('inventory-chatbot', {
-        body: {
+      // Call the backend chat API
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           question,
-          requestsData: [] // You can pass actual requests data if needed
-        }
+        }),
       });
 
-      if (error) throw error;
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
 
       const botResponse: Message = {
         id: messages.length + 2,

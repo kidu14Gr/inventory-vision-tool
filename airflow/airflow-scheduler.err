@@ -1,0 +1,5 @@
+[2025-09-13 22:54:08 +0300] [42584] [INFO] Starting gunicorn 22.0.0
+[2025-09-13 22:54:08 +0300] [42584] [INFO] Listening at: http://[::]:8793 (42584)
+[2025-09-13 22:54:08 +0300] [42584] [INFO] Using worker: sync
+[2025-09-13 22:54:08 +0300] [42585] [INFO] Booting worker with pid: 42585
+[2025-09-13 22:54:08 +0300] [42586] [INFO] Booting worker with pid: 42586
