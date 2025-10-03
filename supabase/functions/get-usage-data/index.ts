@@ -13,45 +13,36 @@ serve(async (req) => {
   try {
     const { project } = await req.json();
 
-    // TODO: Replace this with actual data from your database or Kafka
-    // This is sample data matching the Streamlit structure
-    const mockRequestsData = [
-      {
-        project_display: "PROJECT A",
-        item_name: "Cement Bags",
-        requested_quantity: 50,
-        current_consumed_amount: 30,
-        returned_quantity: 10,
-        requester_name: "John Doe",
-        requested_date: "2025-09-20",
-        requester_received_date: "2025-09-21"
-      },
-      {
-        project_display: "PROJECT A",
-        item_name: "Steel Bars",
-        requested_quantity: 20,
-        current_consumed_amount: 15,
-        returned_quantity: 5,
-        requester_name: "Jane Smith",
-        requested_date: "2025-09-22",
-        requester_received_date: "2025-09-23"
-      },
-      {
-        project_display: "PROJECT B",
-        item_name: "Paint Buckets",
-        requested_quantity: 30,
-        current_consumed_amount: 0,
-        returned_quantity: 0,
-        requester_name: "Mike Johnson",
-        requested_date: "2025-08-15",
-        requester_received_date: "2025-08-16"
-      }
-    ];
+    // Fetch data from Kafka API
+    const kafkaApiUrl = Deno.env.get("KAFKA_API_URL");
+    if (!kafkaApiUrl) {
+      throw new Error("KAFKA_API_URL not configured");
+    }
+
+    const kafkaResponse = await fetch(`${kafkaApiUrl}/consume`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        topic: "scm_requests",
+        group_id: "scm_requests_group",
+        auto_offset_reset: "earliest",
+        limit: 5000
+      })
+    });
+
+    if (!kafkaResponse.ok) {
+      throw new Error(`Kafka API error: ${kafkaResponse.statusText}`);
+    }
+
+    const kafkaData = await kafkaResponse.json();
+    const requestsData = kafkaData.messages?.map((msg: any) => msg.value) || [];
 
     // Filter by project if specified
-    let filteredData = mockRequestsData;
+    let filteredData = requestsData;
     if (project && project !== "All Projects") {
-      filteredData = mockRequestsData.filter(item => item.project_display === project);
+      filteredData = requestsData.filter((item: any) => 
+        item.project_display === project || item.requested_project_name === project
+      );
     }
 
     // Calculate analytics

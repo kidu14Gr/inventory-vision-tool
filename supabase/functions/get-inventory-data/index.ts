@@ -13,51 +13,36 @@ serve(async (req) => {
   try {
     const { project } = await req.json();
 
-    // TODO: Replace this with actual data from your database or Kafka
-    // This is sample data matching the Streamlit structure
-    const mockInventoryData = [
-      {
-        item_name: "Cement Bags",
-        price: 450,
-        date_of_purchased: "2025-09-15",
-        store_store_name: "BuildMart",
-        quantity: 100,
-        amount: 45000,
-        project_display: "PROJECT A"
-      },
-      {
-        item_name: "Steel Bars",
-        price: 850,
-        date_of_purchased: "2025-09-20",
-        store_store_name: "MetalSupply Co",
-        quantity: 5,
-        amount: 4250,
-        project_display: "PROJECT A"
-      },
-      {
-        item_name: "Paint Buckets",
-        price: 320,
-        date_of_purchased: "2025-09-25",
-        store_store_name: "ColorWorld",
-        quantity: 25,
-        amount: 8000,
-        project_display: "PROJECT B"
-      },
-      {
-        item_name: "Electrical Wire",
-        price: 180,
-        date_of_purchased: "2025-09-28",
-        store_store_name: "ElectroMart",
-        quantity: 15,
-        amount: 2700,
-        project_display: "PROJECT B"
-      }
-    ];
+    // Fetch data from Kafka API
+    const kafkaApiUrl = Deno.env.get("KAFKA_API_URL");
+    if (!kafkaApiUrl) {
+      throw new Error("KAFKA_API_URL not configured");
+    }
+
+    const kafkaResponse = await fetch(`${kafkaApiUrl}/consume`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        topic: "scm_inventory",
+        group_id: "scm_inventory_group",
+        auto_offset_reset: "earliest",
+        limit: 5000
+      })
+    });
+
+    if (!kafkaResponse.ok) {
+      throw new Error(`Kafka API error: ${kafkaResponse.statusText}`);
+    }
+
+    const kafkaData = await kafkaResponse.json();
+    const inventoryData = kafkaData.messages?.map((msg: any) => msg.value) || [];
 
     // Filter by project if specified
-    let filteredData = mockInventoryData;
+    let filteredData = inventoryData;
     if (project && project !== "All Projects") {
-      filteredData = mockInventoryData.filter(item => item.project_display === project);
+      filteredData = inventoryData.filter((item: any) => 
+        item.project_display === project || item.department_id === project
+      );
     }
 
     // Calculate status for each item

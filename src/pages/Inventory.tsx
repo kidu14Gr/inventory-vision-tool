@@ -70,11 +70,6 @@ const Inventory = () => {
     fetchInventoryData(project);
   };
 
-  const handleProjectDemandChange = (project) => {
-    setSelectedProjectDemand(project);
-    fetchDemandData(project);
-  };
-
   const handleProjectUsageChange = (project) => {
     setSelectedProjectUsage(project);
     fetchRequestsData(project);
@@ -135,7 +130,7 @@ const Inventory = () => {
       return currentDate < oldestDate ? current : oldest;
     });
 
-    const daysHeld = Math.floor((new Date() - new Date(oldest.requested_date || oldest.requester_received_date)) / (1000 * 60 * 60 * 24));
+    const daysHeld = Math.floor((new Date().getTime() - new Date(oldest.requested_date || oldest.requester_received_date).getTime()) / (1000 * 60 * 60 * 24));
 
     return {
       requester: oldest.requester_name || 'Unknown Requester',
