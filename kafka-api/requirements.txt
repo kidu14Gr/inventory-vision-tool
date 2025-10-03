@@ -1,5 +1,0 @@
-fastapi
-uvicorn
-kafka-python
-pandas
-pydantic

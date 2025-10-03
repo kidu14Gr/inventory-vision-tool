@@ -18,7 +18,7 @@ export function ChatBot() {
   ]);
   const [inputValue, setInputValue] = useState("");
 
-  const handleSend = async () => {
+  const handleSend = () => {
     if (!inputValue.trim()) return;
 
     const newMessage: Message = {
@@ -28,40 +28,17 @@ export function ChatBot() {
     };
 
     setMessages([...messages, newMessage]);
-    const question = inputValue;
     setInputValue("");
 
-    try {
-      // Call the backend chat API
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          question,
-        }),
-      });
-
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
-      const data = await response.json();
-
+    // Simulate bot response
+    setTimeout(() => {
       const botResponse: Message = {
         id: messages.length + 2,
-        text: data.answer || "I couldn't generate a response.",
+        text: "I'm here to help! This is a demo response.",
         sender: "bot"
       };
       setMessages(prev => [...prev, botResponse]);
-    } catch (error) {
-      console.error("Error calling chatbot:", error);
-      const errorResponse: Message = {
-        id: messages.length + 2,
-        text: "Sorry, I encountered an error. Please try again.",
-        sender: "bot"
-      };
-      setMessages(prev => [...prev, errorResponse]);
-    }
+    }, 1000);
   };
 
   return (

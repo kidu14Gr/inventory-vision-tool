@@ -1,62 +1,112 @@
-import React from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-type InventoryItem = {
-  item_name?: string;
-  price?: number;
-  date_of_purchased?: string;
-  store_store_name?: string;
-  quantity?: number;
-  amount?: number;
-  Status?: string;
-  [key: string]: any;
-};
+const inventoryData = [
+  {
+    id: 1,
+    name: "DELL EMC VMAX STORAGE SERVER",
+    model: "DELL EMC",
+    serialNumber: "CKM01212206136",
+    type: "Project Items",
+    store: "Main Store",
+    amount: 1,
+    unitOfMeasurement: "pcs",
+    project: "HQ",
+    itemNumber: "NA",
+    price: 1,
+    totalPrice: 1,
+  },
+  {
+    id: 2,
+    name: "Fiber Patch Cable",
+    model: "",
+    serialNumber: "",
+    type: "-",
+    store: "Logistics Temp Store",
+    amount: 1,
+    unitOfMeasurement: "pcs",
+    project: "-",
+    itemNumber: 1436.4,
+    price: 1436.4,
+    totalPrice: 1436.4,
+  },
+  // Add more items as needed
+];
 
-interface InventoryTableProps {
-  data?: InventoryItem[];
-}
-
-export function InventoryTable({ data = [] }: InventoryTableProps) {
-  const items = data;
-
+export function InventoryTable() {
   return (
     <div className="space-y-4">
+      {/* Controls */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Select defaultValue="main-store">
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="main-store">Store</SelectItem>
+              <SelectItem value="temp-store">Temp Store</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Select defaultValue="item-group">
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="item-group">Item Group</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary" className="bg-company-primary text-company-primary-foreground px-4 py-2">
+            7427 Items Count
+          </Badge>
+        </div>
+      </div>
+
       {/* Table */}
       <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-12"></TableHead>
               <TableHead>Item Name</TableHead>
-              <TableHead>Price</TableHead>
-              <TableHead>Date Purchased</TableHead>
+              <TableHead>Model</TableHead>
+              <TableHead>Serial Number</TableHead>
+              <TableHead>Type</TableHead>
               <TableHead>Store</TableHead>
-              <TableHead>Quantity</TableHead>
               <TableHead>Amount</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>Unit of Measurement</TableHead>
+              <TableHead>Project</TableHead>
+              <TableHead>Item Number</TableHead>
+              <TableHead>Price</TableHead>
+              <TableHead>Total Price</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {items.map((item, index) => (
-              <TableRow key={index}>
-                <TableCell className="font-medium">{item.item_name || "N/A"}</TableCell>
-                <TableCell>{item.price ? `${item.price.toLocaleString()} birr` : "N/A"}</TableCell>
-                <TableCell>{item.date_of_purchased || "N/A"}</TableCell>
-                <TableCell>{item.store_store_name || "N/A"}</TableCell>
-                <TableCell>{item.quantity || 0}</TableCell>
-                <TableCell>{item.amount ? item.amount.toLocaleString() : 0}</TableCell>
+            {inventoryData.map((item) => (
+              <TableRow key={item.id}>
                 <TableCell>
-                  <Badge
-                    variant={
-                      item.Status === "Critical" ? "destructive" :
-                      item.Status === "Low Stock" ? "secondary" :
-                      "default"
-                    }
-                  >
-                    {item.Status || "Unknown"}
-                  </Badge>
+                  <div className="w-8 h-8 bg-muted rounded flex items-center justify-center">
+                    <span className="text-xs text-muted-foreground">IMG</span>
+                  </div>
                 </TableCell>
+                <TableCell className="font-medium">{item.name}</TableCell>
+                <TableCell>{item.model || "-"}</TableCell>
+                <TableCell>{item.serialNumber || "-"}</TableCell>
+                <TableCell>{item.type}</TableCell>
+                <TableCell>{item.store}</TableCell>
+                <TableCell>{item.amount}</TableCell>
+                <TableCell>{item.unitOfMeasurement}</TableCell>
+                <TableCell>{item.project}</TableCell>
+                <TableCell>{item.itemNumber === "NA" ? "NA" : item.itemNumber}</TableCell>
+                <TableCell>{item.price}</TableCell>
+                <TableCell>{item.totalPrice}</TableCell>
               </TableRow>
             ))}
           </TableBody>

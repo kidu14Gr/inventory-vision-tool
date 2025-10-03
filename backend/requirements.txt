@@ -1,6 +1,0 @@
-fastapi
-uvicorn[standard]
-kafka-python
-pandas
-python-dotenv
-requests
