@@ -207,7 +207,7 @@ export function PredictionTable({ selectedProject }: PredictionTableProps) {
                   <div className="text-sm">{item.estimatedApproval}</div>
                 </TableCell>
                 <TableCell>
-                  <div className="font-medium">${item.unitPrice}</div>
+                  <div className="font-medium">{item.unitPrice.toFixed(2)} Birr</div>
                 </TableCell>
               </TableRow>
             ))}
