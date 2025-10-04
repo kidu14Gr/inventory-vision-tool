@@ -93,7 +93,7 @@ export function InventoryTable() {
               <TableHead>Serial Number</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Store</TableHead>
-              <TableHead>Amount</TableHead>
+              <TableHead>Quantity</TableHead>
               <TableHead>Unit of Measurement</TableHead>
               <TableHead>Project</TableHead>
               <TableHead>Item Number</TableHead>
