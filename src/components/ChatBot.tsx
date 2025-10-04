@@ -210,9 +210,66 @@ export function ChatBot() {
 
     // SUMMARY / ANALYSIS
     if (isSummary || (q.split(/\s+/).length > 3 && !isInventoryStatus)) {
-      const cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - 3);
+      // Parse time period from query
+      let periodMonths = 3; // default
+      let periodDays = 0;
+      let periodString = 'last 3 months';
+      let when = '';
+      let unit = '';
+      const periodRe = /(this|last)\s+(week|month|3 months|6 months|year)/i;
+      const match = q.match(periodRe);
+      if (match) {
+        when = match[1].toLowerCase();
+        unit = match[2].toLowerCase();
+        if (unit === 'week') {
+          periodDays = when === 'this' ? 7 : 14;
+          periodMonths = 0;
+          periodString = `${when} week`;
+        } else if (unit === 'month') {
+          periodMonths = when === 'this' ? 1 : 2;
+          periodString = `${when} month`;
+        } else if (unit === '3 months') {
+          periodMonths = 3;
+          periodString = 'last 3 months';
+        } else if (unit === '6 months') {
+          periodMonths = 6;
+          periodString = 'last 6 months';
+        } else if (unit === 'year') {
+          periodMonths = 12;
+          periodString = 'last year';
+        }
+      }
+
+      const cutoff = new Date();
+      if (periodMonths && unit !== 'month') {
+        cutoff.setMonth(cutoff.getMonth() - periodMonths);
+      } else if (unit === 'month') {
+        if (when === 'this') {
+          cutoff = new Date(cutoff.getFullYear(), cutoff.getMonth(), 1);
+        } else {
+          cutoff = new Date(cutoff.getFullYear(), cutoff.getMonth() - 1, 1);
+        }
+      } else if (unit === 'week') {
+        if (when === 'this') {
+          // Start of current week (Monday)
+          const now = new Date();
+          const dayOfWeek = now.getDay(); // 0 = Sunday
+          const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+          cutoff.setDate(now.getDate() - daysSinceMonday);
+          cutoff.setHours(0, 0, 0, 0);
+        } else { // last
+          // Start of last week (Monday)
+          const now = new Date();
+          const dayOfWeek = now.getDay();
+          const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+          cutoff.setDate(now.getDate() - daysSinceMonday - 7);
+          cutoff.setHours(0, 0, 0, 0);
+        }
+      } else {
+        cutoff.setDate(cutoff.getDate() - periodDays);
+      }
       const period = (requestsDf || []).filter((r:any) => r.requested_date && new Date(r.requested_date) >= cutoff && (!projectName || (r.project_display||r.requested_project_name) === projectName));
-      if (!period.length) return `No data available for the requested period (last 3 months).`;
+      if (!period.length) return `No data available for the requested period (${periodString}).`;
       const totalRequested = period.reduce((s:any, r:any) => s + (Number(r.requested_quantity) || 0), 0);
       const avgQty = period.length ? totalRequested / period.length : 0;
       const counts: Record<string, number> = {};
@@ -223,7 +280,7 @@ export function ChatBot() {
       if (generateGeminiResponse) {
         try {
           const csvRows = period.map((r:any) => `${r.project_display||r.requested_project_name||''},${r.item_name||''},${r.requested_quantity||''},${r.requested_date||''}`).join('\n');
-          const prompt = `You are a concise inventory analyst. INPUT: CSV rows below contain project_display,item_name,requested_quantity,requested_date. TASK: Produce a short executive summary (max 3 lines):\n1) Headline: State the total requested quantity for the period and calculate the trend (increase/decrease/stable) compared to the immediately preceding period of the same length, based on 'requested_quantity' sum.\n2) Top Items: List the top 3 items and their total requested counts for this period.\n3) Recommendation: Provide one short, actionable recommendation based on the data. If data insufficient, reply 'NO_DATA'.\n\nPERIOD: last 3 months\nDATA:\nproject_display,item_name,requested_quantity,requested_date\n${csvRows}\n\nREPLY (plain text, max 3 lines):`;
+          const prompt = `You are a concise inventory analyst. INPUT: CSV rows below contain project_display,item_name,requested_quantity,requested_date. TASK: Produce a short executive summary (max 3 lines):\n1) Headline: State the total requested quantity for the period and calculate the trend (increase/decrease/stable) compared to the immediately preceding period of the same length, based on 'requested_quantity' sum.\n2) Top Items: List the top 3 items and their total requested counts for this period.\n3) Recommendation: Provide one short, actionable recommendation based on the data. If data insufficient, reply 'NO_DATA'.\n\nPERIOD: ${periodString}\nDATA:\nproject_display,item_name,requested_quantity,requested_date\n${csvRows}\n\nREPLY (plain text, max 3 lines):`;
           const resp = await generateGeminiResponse(prompt);
           if (resp && !resp.toUpperCase().startsWith('NO_DATA')) return resp;
         } catch (e) {
@@ -232,7 +289,7 @@ export function ChatBot() {
       }
 
       // Local summary fallback
-      return `Summary (last 3 months): Total requested = ${totalRequested}, Avg per request = ${avgQty.toFixed(2)}. Top items: ${topItems || 'No items'}. Recommendation: Review trend and verify stock for top items.`;
+      return `Summary (${periodString}): Total requested = ${totalRequested}, Avg per request = ${avgQty.toFixed(2)}. Top items: ${topItems || 'No items'}. Recommendation: Review trend and verify stock for top items.`;
     }
 
     // ITEM-specific fallback
