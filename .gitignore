@@ -22,4 +22,4 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-streamlit_app.pyZone.Identifier
+*:Zone.Identifier
