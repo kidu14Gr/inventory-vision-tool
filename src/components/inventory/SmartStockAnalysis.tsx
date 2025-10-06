@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Search, Filter, Download, BarChart3, AlertTriangle, CheckCircle, Package2, MapPin } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { ProcessedInventoryItem } from "@/lib/services/dataService";
 import { consumeKafkaTopic } from "@/lib/services/kafkaService";
 import { generateGeminiResponse } from "@/lib/services/geminiService";
@@ -15,9 +15,10 @@ interface SmartStockAnalysisProps {
 }
 
 export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps) {
-  const [viewType, setViewType] = useState<"amount" | "quantity">("amount");
-  const [inventoryProject, setInventoryProject] = useState(selectedProject || "all-projects");
+  const [viewType, setViewType] = useState<"Amount" | "Quantity">("Quantity");
+  const [inventoryProject, setInventoryProject] = useState("");
   const [analyticsProject, setAnalyticsProject] = useState(selectedProject || "all-projects");
+  const [searchTerm, setSearchTerm] = useState("");
   const [stockAnalysisData, setStockAnalysisData] = useState<ProcessedInventoryItem[]>([]);
   const [analyticsData, setAnalyticsData] = useState<ProcessedInventoryItem[]>([]);
   const [requestsList, setRequestsList] = useState<any[]>([]);
@@ -118,7 +119,7 @@ export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps)
         });
 
         const aggregatedInventory = Array.from(aggMap.values()).map(it => {
-          const statusField = viewType === 'amount' ? Number(it.amount || 0) : Number(it.quantity || 0);
+          const statusField = viewType === "Amount" ? Number(it.amount || 0) : Number(it.quantity || 0);
           let status: 'sufficient' | 'low' | 'critical' = 'sufficient';
           if (statusField <= 5) status = 'critical';
           else if (statusField <= 20) status = 'low';
@@ -137,12 +138,8 @@ export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps)
         // Save raw requests for usage aggregation
         setRequestsList(requestsData);
 
-        // Set the analysis data filtered by selected inventory project (inventory table)
-        const stockFiltered = inventoryProject && inventoryProject !== 'all-projects'
-          ? aggregatedInventory.filter(i => (i.projects || []).includes(inventoryProject))
-          : aggregatedInventory;
-
-        setStockAnalysisData(stockFiltered);
+        // Set the full aggregated inventory data
+        setStockAnalysisData(aggregatedInventory);
 
         // For analytics (usage), we will compute aggregates directly from requestsList when rendering
       } catch (error) {
@@ -155,15 +152,29 @@ export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps)
     fetchData();
   }, [inventoryProject, analyticsProject]);
 
-  const getCurrentStock = (item: ProcessedInventoryItem) => viewType === "amount" ? item.amount : item.quantity;
+  const filteredStockData = useMemo(() => {
+    let filtered = stockAnalysisData;
+    if (inventoryProject && inventoryProject !== 'all-projects') {
+      filtered = stockAnalysisData.filter(i => (i.projects || []).includes(inventoryProject));
+    } else if (inventoryProject === 'all-projects') {
+      filtered = stockAnalysisData.filter(i => i.status === 'critical' || i.status === 'sufficient');
+    } else {
+      filtered = [];
+    }
+
+    if (searchTerm) {
+      filtered = filtered.filter(i => i.item_name.toLowerCase().includes(searchTerm.toLowerCase()));
+    }
+
+    return filtered;
+  }, [stockAnalysisData, inventoryProject, searchTerm]);
+
+  const getCurrentStock = (item: ProcessedInventoryItem) => viewType === "Amount" ? item.amount : item.quantity;
   
-  const criticalCount = stockAnalysisData.filter(item => item.status === "critical").length;
-  const lowStockCount = stockAnalysisData.filter(item => item.status === "low").length;
-  const sufficientCount = stockAnalysisData.filter(item => item.status === "sufficient").length;
-  const totalValue = stockAnalysisData.reduce((sum, item) => {
-    const price = Number((item.price || '').toString().replace(/[^0-9.-]/g, '')) || 0;
-    return sum + (price * (Number(item.quantity) || 0));
-  }, 0);
+  const criticalCount = filteredStockData.filter(item => item.status === "critical").length;
+  const lowStockCount = filteredStockData.filter(item => item.status === "low").length;
+  const sufficientCount = filteredStockData.filter(item => item.status === "sufficient").length;
+  const totalValue = filteredStockData.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
   // Compute usage aggregates from requestsList filtered by analyticsProject (Streamlit uses requests topic for usage)
   const filteredRequests = analyticsProject && analyticsProject !== 'all-projects'
@@ -181,14 +192,16 @@ export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps)
   ];
 
   // Get overdue items (requested but not returned/consumed for long time)
-  // Overdue: find requests for which returned and consumed are 0 and older than 30 days
-  const overdueItems = filteredRequests.filter(r => {
+  // Overdue: find requests for which returned and consumed are 0 and older than 30 days, show only the one with longest period
+  const allOverdue = filteredRequests.map(r => {
     const returned = r.returned_quantity || 0;
     const consumed = r.current_consumed_amount || r.consumed_amount || 0;
     const date = new Date(r.requested_date || Date.now());
     const daysSinceRequest = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
-    return returned === 0 && consumed === 0 && daysSinceRequest > 30;
-  });
+    return { ...r, daysSinceRequest, returned, consumed };
+  }).filter(r => r.returned === 0 && r.consumed === 0 && r.daysSinceRequest > 30);
+
+  const overdueItems = allOverdue.length > 0 ? [allOverdue.reduce((max, curr) => curr.daysSinceRequest > max.daysSinceRequest ? curr : max)] : [];
 
   // projectOptions is derived and stored in state via setProjectOptions
 
@@ -222,43 +235,31 @@ export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps)
                       ))}
                     </SelectContent>
                   </Select>
-                  <Select value={viewType} onValueChange={(value: "amount" | "quantity") => setViewType(value)}>
+                  <Select value={viewType} onValueChange={(value: "Amount" | "Quantity") => setViewType(value)}>
                     <SelectTrigger className="w-32">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="amount">Amount</SelectItem>
-                      <SelectItem value="quantity">Quantity</SelectItem>
+                      <SelectItem value="Amount">Amount</SelectItem>
+                      <SelectItem value="Quantity">Quantity</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Button size="sm" className="bg-company-primary text-company-primary-foreground hover:bg-company-primary/90">
-                    <Download className="h-4 w-4 mr-2" />
-                    Export
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={async () => {
-                    try {
-                      setAiResponse(null);
-                      setAiLoading(true);
-                      // Build a compact prompt similar to streamlit_app.ask_chatbot analysis prompt
-                      const inventorySummary = stockAnalysisData.slice(0, 30).map(it => `${it.item_name}: ${it.quantity} units`).join('\n');
-                      const requestsSummary = filteredRequests.slice(0, 50).map(r => `${r.project_display || 'proj'}: ${r.item_name} - ${r.requested_quantity || r.requested || 0} units`).join('\n');
-                      const prompt = `You are a Senior Inventory Strategist. Provide an executive-level analysis for the selected project(s).\n\nInventory:\n${inventorySummary}\n\nRecent Requests:\n${requestsSummary}\n\nProvide a concise headline, key drivers, trend, business impact, and actionable recommendations.`;
-                      const resp = await generateGeminiResponse(prompt);
-                      setAiResponse(resp);
-                    } catch (e) {
-                      console.error('AI analysis failed', e);
-                      setAiResponse('AI analysis failed.');
-                    } finally {
-                      setAiLoading(false);
-                    }
-                  }}>
-                    {aiLoading ? 'Analyzing…' : 'AI Analysis'}
-                  </Button>
                 </div>
               </div>
 
+              {/* Search Input */}
+              <div className="flex items-center gap-2">
+                <Search className="h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search items..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-64"
+                />
+              </div>
+
               {/* Metrics after project selection */}
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div className="p-3 rounded-lg border-l-4 border-l-destructive bg-gradient-to-br from-destructive/5 to-destructive/10">
                   <p className="text-2xl font-bold text-destructive">{criticalCount}</p>
                   <p className="text-xs text-muted-foreground">Critical</p>
@@ -270,10 +271,6 @@ export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps)
                 <div className="p-3 rounded-lg border-l-4 border-l-success bg-gradient-to-br from-success/5 to-success/10">
                   <p className="text-2xl font-bold text-success">{sufficientCount}</p>
                   <p className="text-xs text-muted-foreground">Sufficient</p>
-                </div>
-                <div className="p-3 rounded-lg border-l-4 border-l-company-primary bg-gradient-to-br from-company-primary/5 to-company-primary/10">
-                  <p className="text-2xl font-bold text-company-primary">{totalValue.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})} Birr</p>
-                  <p className="text-xs text-muted-foreground">Total Value</p>
                 </div>
               </div>
             </div>
@@ -293,7 +290,7 @@ export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps)
                   </tr>
                 </thead>
                 <tbody>
-                  {stockAnalysisData.map((item, index) => (
+                  {filteredStockData.map((item, index) => (
                     <tr key={index} className="border-b hover:bg-gradient-to-r hover:from-company-primary/5 hover:to-transparent transition-all duration-200">
                       <td className="p-4">
                         <div>
@@ -314,14 +311,14 @@ export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps)
                       </td>
                       <td className="p-4">
                         <Badge className={`${
-                          item.status === "critical" 
+                          item.status === "critical"
                             ? "bg-destructive/10 text-destructive border-destructive/20" :
                           item.status === "low"
                             ? "bg-warning/10 text-warning border-warning/20"
                             : "bg-success/10 text-success border-success/20"
                         }`}>
                           {item.status === "critical" ? "Critical" :
-                           item.status === "low" ? "Low" : "Sufficient"}
+                           item.status === "low" ? "Low Stock" : "Sufficient"}
                         </Badge>
                       </td>
                     </tr>
