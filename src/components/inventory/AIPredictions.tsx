@@ -6,6 +6,7 @@ import { RefreshCw, Brain } from "lucide-react";
 import { PredictionSummary } from "./PredictionSummary";
 import { DemandPrediction } from "./DemandPrediction";
 import { SmartStockAnalysis } from "./SmartStockAnalysis";
+import { ChatBot } from "@/components/ChatBot";
 
 export function AIPredictions() {
   const [selectedProject, setSelectedProject] = useState("all-projects");
@@ -45,6 +46,9 @@ export function AIPredictions() {
 
       {/* Smart Stock Analysis Dashboard */}
       <SmartStockAnalysis selectedProject={selectedProject} />
+
+      {/* AI Chatbot */}
+      <ChatBot />
     </div>
   );
 }
