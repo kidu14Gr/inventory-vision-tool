@@ -1,3 +1,4 @@
+// src/components/ChatBot.tsx
 import { useState, useEffect, useRef } from "react";
 import { MessageCircle, X, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -5,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { consumeKafkaTopic } from "@/lib/services/kafkaService";
-import { generateGeminiResponse } from "@/lib/services/geminiService";
+import { generateGeminiResponse } from "@/lib/services/LLMService";
 
 interface Message {
   id: number;
@@ -13,12 +14,62 @@ interface Message {
   sender: "user" | "bot";
 }
 
+/* Utility helpers (unchanged behavior) */
+const normalize = (s?: string) => (s || "").toString().trim().toLowerCase();
+const safeToNumber = (v: any) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const findProjectFromText = (q: string, requestsDf: any[]): string | null => {
+  const projects = Array.from(
+    new Set(
+      (requestsDf || []).map((r: any) =>
+        normalize(r.project_display || r.requested_project_name)
+      )
+    )
+  ).filter(Boolean);
+
+  for (const p of projects) {
+    const re = new RegExp(
+      `\\b${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+      "i"
+    );
+    if (re.test(q)) return p;
+  }
+  return null;
+};
+
+const findItemFromText = (
+  q: string,
+  requestsDf: any[],
+  inventoryDf: any[]
+): string | null => {
+  const itemsSet = new Set<string>();
+  (requestsDf || []).forEach(
+    (r: any) => r.item_name && itemsSet.add(normalize(r.item_name))
+  );
+  (inventoryDf || []).forEach(
+    (i: any) => i.item_name && itemsSet.add(normalize(i.item_name))
+  );
+  const items = Array.from(itemsSet).filter(Boolean);
+
+  for (const it of items) {
+    const re = new RegExp(
+      `\\b${it.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+      "i"
+    );
+    if (re.test(q)) return it;
+  }
+  return null;
+};
+
 export function ChatBot() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
-      text: "Hello! How can I help you with your inventory today?",
+      text: "Hello! I'm your AI inventory assistant. How can I help you today?",
       sender: "bot",
     },
   ]);
@@ -26,7 +77,6 @@ export function ChatBot() {
   const [inventoryData, setInventoryData] = useState<any[]>([]);
   const [requestsData, setRequestsData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [lastResponse, setLastResponse] = useState<string>("");
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,6 +88,13 @@ export function ChatBot() {
         ]);
         setInventoryData(Array.isArray(inventory) ? inventory : []);
         setRequestsData(Array.isArray(requests) ? requests : []);
+        console.log(
+          `Loaded ${
+            Array.isArray(inventory) ? inventory.length : 0
+          } inventory records and ${
+            Array.isArray(requests) ? requests.length : 0
+          } request records.`
+        );
       } catch (error) {
         console.error("Failed to fetch data for chatbot:", error);
         setInventoryData([]);
@@ -59,592 +116,240 @@ export function ChatBot() {
     return () => clearTimeout(t);
   }, [messages]);
 
-  // Utility helpers
-  const normalize = (s?: string) => (s || "").toString().trim().toLowerCase();
+  /* Helper: clean LLM response from markdown formatting */
+  const cleanLLMResponse = (text: string): string => {
+    let cleaned = text;
 
-  const findProjectFromText = (q: string, requestsDf: any[]): string | null => {
-    const projects = Array.from(
-      new Set(
-        (requestsDf || []).map((r: any) =>
-          normalize(r.project_display || r.requested_project_name)
-        )
-      )
-    );
-    if (!projects.length) return null;
-    // Token/phrase match (prefer exact match)
-    for (const p of projects) {
-      if (!p) continue;
-      const re = new RegExp(
-        `\\b${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
-        "i"
-      );
-      if (re.test(q)) return p;
-    }
-    return null;
+    // Remove asterisks used for bold/emphasis (**text** or *text*)
+    cleaned = cleaned.replace(/\*\*([^*]+)\*\*/g, "$1");
+    cleaned = cleaned.replace(/\*([^*]+)\*/g, "$1");
+
+    // Remove markdown headers (# ## ###)
+    cleaned = cleaned.replace(/^#{1,6}\s+/gm, "");
+
+    // Remove markdown list markers at the start of lines (-, *, •)
+    cleaned = cleaned.replace(/^[\s]*[-*•]\s+/gm, "");
+
+    // Remove numbered list markers (1. 2. 3.)
+    cleaned = cleaned.replace(/^[\s]*\d+\.\s+/gm, "");
+
+    // Clean up any double spaces created by removals
+    cleaned = cleaned.replace(/  +/g, " ");
+
+    // Clean up excessive line breaks (more than 2 consecutive)
+    cleaned = cleaned.replace(/\n{3,}/g, "\n\n");
+
+    return cleaned.trim();
   };
 
-  const findItemFromText = (
-    q: string,
-    requestsDf: any[],
-    inventoryDf: any[]
-  ): string | null => {
-    const itemsSet = new Set<string>();
-    (requestsDf || []).forEach(
-      (r: any) => r.item_name && itemsSet.add(normalize(r.item_name))
-    );
-    (inventoryDf || []).forEach(
-      (i: any) => i.item_name && itemsSet.add(normalize(i.item_name))
-    );
-    const items = Array.from(itemsSet);
-    if (!items.length) return null;
-    // prefer exact phrase match (case-insensitive)
-    for (const it of items) {
-      if (!it) continue;
-      const re = new RegExp(
-        `\\b${it.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
-        "i"
-      );
-      if (re.test(q)) return it;
+  /* Helper: create data summary statistics */
+  const summarizeData = (requests: any[], inventory: any[]) => {
+    const summary: any = {
+      requestStats: {},
+      inventoryStats: {},
+      recentRequests: [],
+      topItems: [],
+    };
+
+    // Request statistics
+    if (requests.length > 0) {
+      const itemQuantities: Record<string, number> = {};
+      const projectRequests: Record<string, number> = {};
+
+      requests.forEach((r: any) => {
+        const item = r.item_name || "Unknown";
+        const qty = safeToNumber(r.requested_quantity || r.quantity);
+        const proj = r.project_display || r.requested_project_name || "Unknown";
+
+        itemQuantities[item] = (itemQuantities[item] || 0) + qty;
+        projectRequests[proj] = (projectRequests[proj] || 0) + 1;
+      });
+
+      summary.requestStats = {
+        totalRequests: requests.length,
+        uniqueItems: Object.keys(itemQuantities).length,
+        uniqueProjects: Object.keys(projectRequests).length,
+        topItemsByQuantity: Object.entries(itemQuantities)
+          .sort(([, a], [, b]) => (b as number) - (a as number))
+          .slice(0, 10)
+          .map(([item, qty]) => ({ item, quantity: qty })),
+        topProjects: Object.entries(projectRequests)
+          .sort(([, a], [, b]) => (b as number) - (a as number))
+          .slice(0, 5)
+          .map(([project, count]) => ({ project, count })),
+      };
+
+      // Most recent requests (limit to 50)
+      summary.recentRequests = requests.slice(-50).map((r: any) => ({
+        item: r.item_name,
+        quantity: r.requested_quantity || r.quantity,
+        project: r.project_display || r.requested_project_name,
+        date: r.requested_date || r.date,
+        status: r.status,
+      }));
     }
-    // fallback: contains token
-    const tokens = q.match(/[A-Za-z0-9_-]{3,}/g) || [];
-    for (const t of tokens) {
-      const tnorm = normalize(t);
-      for (const it of items) {
-        if (it === tnorm) return it;
-      }
+
+    // Inventory statistics
+    if (inventory.length > 0) {
+      summary.inventoryStats = {
+        totalItems: inventory.length,
+        items: inventory.slice(0, 100).map((i: any) => ({
+          name: i.item_name,
+          quantity: i.quantity_available || i.quantity,
+          unit: i.unit,
+          location: i.warehouse_location,
+        })),
+      };
     }
-    return null;
+
+    return summary;
   };
 
-  const safeToNumber = (v: any) => {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : 0;
-  };
-
-  const topByRequests = (
-    requestsDf: any[],
-    months = 3,
-    topN = 5,
-    projectName?: string
-  ) => {
-    if (!requestsDf || !requestsDf.length) return [];
-    const cutoff = new Date();
-    cutoff.setMonth(cutoff.getMonth() - months);
-    const filtered = (requestsDf || []).filter((r: any) => {
-      const d = r.requested_date ? new Date(r.requested_date) : null;
-      if (!d) return false;
-      if (
-        projectName &&
-        normalize(r.project_display || r.requested_project_name) !==
-          normalize(projectName)
-      )
-        return false;
-      return d >= cutoff;
-    });
-    const counts: Record<string, number> = {};
-    for (const r of filtered) {
-      const name = r.item_name || "Unknown";
-      counts[name] =
-        (counts[name] || 0) + (safeToNumber(r.requested_quantity) || 1);
-    }
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, topN)
-      .map(([k, v]) => ({ item: k, qty: v }));
-  };
-
-  // Main chatbot logic
   const askChatbot = async (
     userQuestion: string,
     inventoryDf: any[],
     requestsDf: any[]
   ): Promise<string> => {
-    if (!userQuestion || !userQuestion.toString().trim()) {
-      return "Please ask a valid question about inventory, usage, or forecasts.";
-    }
-
     const qRaw = userQuestion.toString().trim();
     const q = qRaw.toLowerCase();
 
-    // greetings / help (do not run heavy analysis)
-    const greetingRe =
-      /\b(hi|hello|hey|good morning|good afternoon|good evening|how are you|what's up)\b/i;
+    const greetingRe = /\b(hi|hello|hey|what can you do|help)\b/i;
     if (greetingRe.test(q)) {
-      return "Hi! 👋 I can summarize requests, check unreturned items, forecast demand, and highlight potential low-stock items. Try: 'Summary last month' or 'Predict next week demand for cement'.";
-    }
-    const helpRe = /\b(help|what can you do|capabilities|how to use)\b/i;
-    if (helpRe.test(q)) {
-      return [
-        "I can:",
-        "- Summarize requests for a timeframe (e.g. 'summary for last month')",
-        "- Forecast next-week demand for an item (e.g. 'predict next week demand for Cement in PROJECT_X')",
-        "- Identify long unreturned items per project (e.g. 'unreturned items for PROJECT_X')",
-        "- Flag potentially low-stock items using inventory levels + recent requests (e.g. 'what items are in critical state')",
-      ].join("\n");
+      return "Hi! I can help you analyze inventory levels, forecast demand, summarize project usage, and provide stock insights. What would you like to know?";
     }
 
-    // intent keywords
-    const forecastKeywords = [
-      "next week",
-      "next-week",
-      "next month",
-      "forecast",
-      "predict",
-      "prediction",
-    ];
-    const unreturnedKeywords = [
-      "unreturned",
-      "not returned",
-      "still with",
-      "longest unreturned",
-      "unconsumed",
-    ];
-    const summaryKeywords = [
-      "summary",
-      "summarize",
-      "top",
-      "most requested",
-      "top requested",
-      "trend",
-      "analysis",
-      "statistics",
-      "stats",
-      "report",
-      "overview",
-    ];
-    // inventory status requires explicit ask; we don't want accidental trigger on 'top' or 'summary'
-    const inventoryStatusKeywords = [
-      "critical state",
-      "critical",
-      "low stock",
-      "stock status",
-      "needed",
-      "urgent",
-      "low on stock",
-      "running out",
-    ];
+    // Entity extraction
+    const projectName = findProjectFromText(qRaw, requestsDf);
+    const itemName = findItemFromText(qRaw, requestsDf, inventoryDf);
 
-    const isForecast = forecastKeywords.some((k) => q.includes(k));
-    const isUnreturned = unreturnedKeywords.some((k) => q.includes(k));
-    const isSummary = summaryKeywords.some((k) => q.includes(k));
-    const isInventoryStatus = inventoryStatusKeywords.some((k) =>
-      q.includes(k)
-    );
-
-    // robust project/item detection
-    const projectName = findProjectFromText(qRaw, requestsDf) || null;
-    const itemName = findItemFromText(qRaw, requestsDf, inventoryDf) || null;
-
-    // ---------------- Inventory Status (STRICT) ----------------
-    // Only trigger if user explicitly asks about stock/critical/low stock, and not asking for a simple "top" or "summary".
-    if (isInventoryStatus && !isSummary && !isForecast && !isUnreturned) {
-      // Prefer inventory data to determine actual low stock; fallback to request-volume heuristic.
-      if ((inventoryDf || []).length > 0) {
-        // build map by item_name for quick lookup
-        const invMap: Record<string, any> = {};
-        for (const inv of inventoryDf) {
-          if (!inv || !inv.item_name) continue;
-          invMap[normalize(inv.item_name)] = inv;
-        }
-
-        // compute recent demand (3 months) per item
-        const demand = topByRequests(
-          requestsDf,
-          3,
-          50,
-          projectName || undefined
-        ); // get many to compare
-        const candidates: {
-          item: string;
-          demand: number;
-          stock: number | null;
-        }[] = [];
-        for (const d of demand) {
-          const inv = invMap[normalize(d.item)];
-          const stock = inv
-            ? safeToNumber(
-                inv.quantity || inv.stock || inv.amount || inv.available
-              ) || 0
-            : null;
-          candidates.push({ item: d.item, demand: d.qty, stock });
-        }
-
-        // Determine items likely low: stock !== null && stock < demand OR missing stock info but very high demand
-        const low = candidates
-          .filter((c) =>
-            c.stock !== null
-              ? c.stock < Math.max(5, Math.round(c.demand * 0.25))
-              : c.demand > 50
-          )
-          .sort((a, b) => (a.stock === null ? -1 : b.demand - a.demand))
-          .slice(0, 5);
-
-        if (!low.length) {
-          return "Inventory data indicates no obvious low-stock items based on recent demand. Recommendation: perform a manual stock check for high-demand items if needed.";
-        }
-        const txt = low
-          .map(
-            (l) =>
-              `${l.item} — demand(3mo): ${l.demand}${
-                l.stock !== null ? `, stock: ${l.stock}` : ""
-              }`
-          )
-          .join("; ");
-        return `Items potentially low/critical (based on inventory + recent demand): ${txt}. Recommendation: verify stock and reorder critical items.`;
-      }
-
-      // Fallback: no inventory data -> still allow a demand-based heuristic but make it explicit
-      const top = topByRequests(requestsDf, 3, 5, projectName || undefined);
-      if (!top.length)
-        return "Insufficient request history to assess critical items.";
-      const topText = top.map((t) => `${t.item} (${t.qty})`).join(", ");
-      return `No inventory levels available. Based on highest request volume in the last 3 months, items in highest demand are: ${topText}. Recommendation: verify stock levels for these items.`;
-    }
-
-    // ---------------- Forecast ----------------
-    if (isForecast) {
-      // If user specified an item -> attempt LLM then fallback to local heuristic
-      if (itemName) {
-        // Build CSV subset (limit rows to avoid huge prompts)
-        const rows = (requestsDf || [])
-          .slice(-2000)
-          .map(
-            (r: any) =>
-              `${r.project_display || r.requested_project_name || ""},${
-                r.item_name || ""
-              },${r.requested_quantity || ""},${r.requested_date || ""}`
-          )
-          .join("\n");
-        if (generateGeminiResponse) {
-          try {
-            const prompt = [
-              "You are a precise inventory forecasting assistant. Only use the provided data.",
-              "INPUT: CSV rows with columns: project_display,item_name,requested_quantity,requested_date",
-              `TARGET ITEM: ${itemName}`,
-              `TARGET PROJECT: ${projectName || "ALL_PROJECTS"}`,
-              "TASK: Forecast next week demand for the target item.",
-              "RULES:",
-              "- Analyze historical patterns from the data",
-              "- Consider project-specific demand if specified",
-              "- Return exactly one line in this format:",
-              "- Forecast: <integer> units — <brief rationale based only on data>",
-              "- If insufficient data (< 3 requests), reply exactly: INSUFFICIENT_DATA",
-              "- Do not make assumptions or use external knowledge",
-              "DATA:",
-              "project_display,item_name,requested_quantity,requested_date",
-              rows,
-            ].join("\n");
-            const resp = await generateGeminiResponse(prompt);
-            if (resp && !/INSUFFICIENT_DATA/i.test(resp)) return resp;
-          } catch (e) {
-            console.warn(
-              "Gemini forecast failed, falling back to local heuristic",
-              e
-            );
-          }
-        }
-
-        // Local fallback: average weekly demand over recent weeks
-        try {
-          const recentCut = new Date();
-          recentCut.setDate(recentCut.getDate() - 7 * 12);
-          const local = (requestsDf || [])
-            .filter(
-              (r: any) =>
-                r.item_name &&
-                normalize(r.item_name) === normalize(itemName) &&
-                r.requested_date
-            )
-            .map((r: any) => ({
-              date: new Date(r.requested_date),
-              qty: safeToNumber(r.requested_quantity),
-            }));
-          const filtered = local.filter((d: any) => d.date >= recentCut);
-          if (!filtered.length)
-            return `Insufficient historical data to predict next-week demand for '${itemName}'.`;
-          // group by ISO week approx (Monday)
-          const weeks: Record<string, number> = {};
-          for (const row of filtered) {
-            const monday = new Date(row.date);
-            const day = monday.getDay(); // 0=Sun
-            const diff = (day + 6) % 7;
-            monday.setDate(monday.getDate() - diff);
-            const key = monday.toISOString().slice(0, 10);
-            weeks[key] = (weeks[key] || 0) + row.qty;
-          }
-          const vals = Object.values(weeks);
-          if (!vals.length)
-            return `Insufficient weekly aggregation data for '${itemName}'.`;
-          const avg = vals.reduce((s, v) => s + v, 0) / vals.length;
-          return `Forecast: ${avg.toFixed(
-            1
-          )} units — based on average weekly requests over the last ${
-            vals.length
-          } weeks.`;
-        } catch (e) {
-          console.warn("Local forecast failed", e);
-          return "Unable to produce a forecast due to insufficient or malformed data.";
-        }
-      } else {
-        // No item specified -> request user to specify or offer top candidates explicitly
-        return "Do you want a forecast for a specific item? Example: 'Predict next week demand for Cement in PROJECT_X'. I can also list the top candidates if you want (ask: 'which items are likely needed next week').";
-      }
-    }
-
-    // ---------------- Unreturned items ----------------
-    if (isUnreturned) {
-      if (!projectName)
-        return "Please specify the project to check unreturned items for (e.g., 'unreturned items for PROJECT_X').";
-      const projReqs = (requestsDf || []).filter(
-        (r: any) =>
+    // Filter relevant request rows (limit to most recent 200 for context)
+    const filteredRequests = (requestsDf || [])
+      .filter((r: any) => {
+        const itemMatch =
+          !itemName || normalize(r.item_name) === normalize(itemName);
+        const projectMatch =
+          !projectName ||
           normalize(r.project_display || r.requested_project_name) ===
-          normalize(projectName)
-      );
-      if (!projReqs.length)
-        return `No request data for project ${projectName}.`;
-      const unreturned = projReqs.filter(
-        (r: any) =>
-          safeToNumber(r.returned_quantity) === 0 &&
-          safeToNumber(r.current_consumed_amount) === 0
-      );
-      if (!unreturned.length)
-        return `No unreturned or unconsumed items for project ${projectName}.`;
-      const withDates = unreturned
-        .map((r: any) => ({
-          ...r,
-          relevant: r.requester_received_date || r.requested_date,
-        }))
-        .filter((r: any) => r.relevant)
-        .sort(
-          (a: any, b: any) =>
-            new Date(a.relevant).getTime() - new Date(b.relevant).getTime()
-        );
-      const oldest = withDates[0];
-      const requester = oldest.requester_name || "Unknown Requester";
-      const item = oldest.item_name || "Unknown Item";
-      const date = new Date(oldest.relevant).toISOString().slice(0, 10);
-      const daysHeld = Math.floor(
-        (Date.now() - new Date(oldest.relevant).getTime()) /
-          (1000 * 60 * 60 * 24)
-      );
-      return `⚠️ Longest unreturned/unconsumed item:\n- ${requester} (Project: ${projectName}) requested ${item} on ${date} (${daysHeld} days ago)`;
+            normalize(projectName);
+        return itemMatch && projectMatch;
+      })
+      .slice(-200); // Reduced from 1000 to 200
+
+    const relevantInventory = (inventoryDf || [])
+      .filter(
+        (i: any) => !itemName || normalize(i.item_name) === normalize(itemName)
+      )
+      .slice(0, 100); // Limit to 100 items
+
+    if (!filteredRequests.length && !relevantInventory.length) {
+      return "I could not find any inventory or request data relevant to your question. Please try a different item or project name.";
     }
 
-    // ---------------- Summary / Analysis ----------------
-    if (isSummary) {
-      // parse simple period phrases (last week, last month, last 3 months, last 6 months)
-      let months = 3;
-      if (/\blast\s+week\b/i.test(q)) months = 1 / 4; // approximate 1 week
-      if (/\blast\s+month\b/i.test(q)) months = 1;
-      if (/\blast\s+6\s+months\b/i.test(q)) months = 6;
-      if (/\bthis\s+month\b/i.test(q)) months = 1; // treat as 1 month window
-      const cutoff = new Date();
-      cutoff.setMonth(cutoff.getMonth() - Math.max(0, Math.floor(months)));
-      const period = (requestsDf || []).filter((r: any) => {
-        if (!r.requested_date) return false;
-        const d = new Date(r.requested_date);
-        return (
-          d >= cutoff &&
-          (!projectName ||
-            normalize(r.project_display || r.requested_project_name) ===
-              normalize(projectName))
-        );
-      });
-      if (!period.length)
-        return `No data available for the requested period (last ${Math.max(
-          1,
-          Math.floor(months)
-        )} months).`;
-      const totalRequested = period.reduce(
-        (s: any, r: any) => s + (safeToNumber(r.requested_quantity) || 0),
-        0
-      );
-      const avgQty = period.length ? totalRequested / period.length : 0;
-      const counts: Record<string, number> = {};
-      for (const r of period)
-        counts[r.item_name] = (counts[r.item_name] || 0) + 1;
-      const topItems = Object.entries(counts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([i, c]) => `${i} (${c})`)
-        .join(", ");
+    // Create summarized data instead of raw CSV
+    const dataSummary = summarizeData(filteredRequests, relevantInventory);
 
-      // Try LLM summary (short)
-      if (generateGeminiResponse) {
-        try {
-          const rows = period
-            .slice(-500)
-            .map(
-              (r: any) =>
-                `${r.project_display || r.requested_project_name || ""},${
-                  r.item_name || ""
-                },${r.requested_quantity || ""},${r.requested_date || ""}`
-            )
-            .join("\n");
-          const prompt = [
-            "You are a precise inventory data analyst. Only analyze the provided data.",
-            "INPUT: CSV rows with columns: project_display,item_name,requested_quantity,requested_date",
-            `ANALYSIS PERIOD: last ${Math.max(1, Math.floor(months))} months${
-              projectName
-                ? ` (filtered to project: ${projectName})`
-                : " (all projects)"
-            }`,
-            "TASK: Create a factual summary based only on the data (max 3 lines):",
-            "FORMAT:",
-            "1) Total items requested and average per request (calculate from data only)",
-            "2) Top 3 most requested items with exact counts from data",
-            "3) One evidence-based recommendation",
-            "RULES:",
-            "- Use only data from the provided CSV rows",
-            "- Do not make assumptions about trends unless clearly supported by data",
-            "- If < 5 requests, reply exactly: INSUFFICIENT_DATA_FOR_ANALYSIS",
-            "- Be precise with numbers",
-            "DATA:",
-            "project_display,item_name,requested_quantity,requested_date",
-            rows,
-          ].join("\n");
-          const resp = await generateGeminiResponse(prompt);
-          if (resp && !/^INSUFFICIENT_DATA_FOR_ANALYSIS|^NO_DATA/i.test(resp))
-            return resp;
-        } catch (e) {
-          console.warn(
-            "Gemini summary failed, falling back to local summary",
-            e
-          );
-        }
-      }
-
-      // local summary fallback
-      return `Summary (last ${Math.max(
-        1,
-        Math.floor(months)
-      )} months): Total requested = ${totalRequested}, Avg per request = ${avgQty.toFixed(
+    // Compose LLM prompt with summarized data
+    const prompt = [
+      "You are an expert Supply Chain Analyst AI assistant. Your role is to provide insightful, conversational analysis of inventory and supply chain data.",
+      `CURRENT DATE: ${new Date().toISOString().slice(0, 10)}`,
+      "",
+      "--- USER QUESTION ---",
+      qRaw,
+      "",
+      "--- DATA SUMMARY ---",
+      "",
+      "REQUEST STATISTICS:",
+      `- Total Requests: ${dataSummary.requestStats.totalRequests || 0}`,
+      `- Unique Items: ${dataSummary.requestStats.uniqueItems || 0}`,
+      `- Unique Projects: ${dataSummary.requestStats.uniqueProjects || 0}`,
+      "",
+      "TOP ITEMS BY QUANTITY:",
+      JSON.stringify(
+        dataSummary.requestStats.topItemsByQuantity || [],
+        null,
         2
-      )}. Top items: ${
-        topItems || "No items"
-      }. Recommendation: review top items and verify stock.`;
-    }
+      ),
+      "",
+      "TOP PROJECTS:",
+      JSON.stringify(dataSummary.requestStats.topProjects || [], null, 2),
+      "",
+      "RECENT REQUESTS (Last 50):",
+      JSON.stringify(dataSummary.recentRequests || [], null, 2),
+      "",
+      "INVENTORY STATUS:",
+      `- Total Items in Inventory: ${
+        dataSummary.inventoryStats.totalItems || 0
+      }`,
+      JSON.stringify(dataSummary.inventoryStats.items || [], null, 2),
+      "",
+      "CRITICAL RESPONSE GUIDELINES:",
+      "",
+      "FORMAT RULES (MUST FOLLOW):",
+      "- Write in flowing paragraphs like you're speaking to a colleague",
+      "- NEVER use asterisks (*) or any markdown formatting",
+      "- NEVER use numbered lists (1. 2. 3.) or bullet points",
+      "- NEVER use bold, italics, or special formatting characters",
+      "- DO NOT structure responses as lists or sections with headers",
+      "- Write naturally as if you're having a conversation",
+      "",
+      "CONTENT STYLE:",
+      "- Keep responses SHORT and CONCISE (2-3 paragraphs maximum)",
+      "- Start with a direct answer or key insight",
+      "- Weave only the MOST IMPORTANT data points naturally into sentences",
+      "- Focus on actionable insights rather than exhaustive details",
+      "- Be brief and to the point while remaining conversational",
+      "- End with 1-2 key recommendations if relevant",
+      "",
+      "EXAMPLE OF GOOD RESPONSE:",
+      "Looking at the HQ project, Ethiopian incorporated leads at 180 units, followed by ID Cards at 150 units. Recent patterns show a shift toward construction materials like gypsum and copper pipes, suggesting facility upgrades. I'd recommend keeping stock for your top two items well ahead of demand and monitoring those emerging infrastructure needs.",
+      "",
+      "Now provide your analysis in this natural, conversational style:",
+    ].join("\n");
 
-    // ---------------- Project Requirements / Item Lists ----------------
-    const requirementKeywords = [
-      "required",
-      "need",
-      "needed",
-      "requirements",
-      "list",
-      "what items",
-    ];
-    const isRequirementQuery =
-      requirementKeywords.some((k) => q.includes(k)) && projectName;
+    // Call AI service
+    try {
+      const response = await generateGeminiResponse(prompt);
+      if (response && response.trim()) {
+        // Clean the response from any markdown formatting
+        return cleanLLMResponse(response);
+      }
+      return "I processed the data, but the AI returned an empty response. Try rephrasing your question or providing a more specific item or project.";
+    } catch (e) {
+      console.error("AI inference failed:", e);
 
-    if (isRequirementQuery && projectName) {
-      // Get items requested for this specific project
-      const projectRequests = (requestsDf || []).filter(
-        (r: any) =>
-          normalize(r.project_display || r.requested_project_name) ===
-            normalize(projectName) && r.requested_date
-      );
+      const error = e as Error;
+      const errorMessage = error.message || "";
 
-      if (!projectRequests.length) {
-        return `No request history found for project '${projectName}'. Try asking for a summary instead.`;
+      // Check for specific error types
+      if (
+        errorMessage.includes("context length") ||
+        errorMessage.includes("maximum context")
+      ) {
+        return "The data set is too large for a single query. Please try asking about a specific item or project to narrow down the results.";
+      } else if (
+        errorMessage.includes("503") ||
+        errorMessage.includes("overloaded")
+      ) {
+        return "The AI model is currently experiencing high demand. I've automatically retried the request, but it's still unavailable. Please wait a few minutes and try again.";
+      } else if (
+        errorMessage.includes("429") ||
+        errorMessage.includes("quota") ||
+        errorMessage.includes("rate limit")
+      ) {
+        return "API rate limit reached. Please wait a moment and try again.";
+      } else if (
+        errorMessage.includes("403") ||
+        errorMessage.includes("forbidden")
+      ) {
+        return "API access denied. Please check your API key configuration.";
+      } else if (
+        errorMessage.includes("500") ||
+        errorMessage.includes("internal")
+      ) {
+        return "The AI service is experiencing internal issues. Please try again in a few minutes.";
       }
 
-      // Group by item and count frequency
-      const itemCounts: Record<
-        string,
-        { count: number; totalQty: number; lastRequested: Date }
-      > = {};
-      for (const req of projectRequests) {
-        const item = req.item_name;
-        if (!item) continue;
-
-        const qty = safeToNumber(req.requested_quantity) || 0;
-        const date = new Date(req.requested_date);
-
-        if (!itemCounts[item]) {
-          itemCounts[item] = { count: 0, totalQty: 0, lastRequested: date };
-        }
-        itemCounts[item].count += 1;
-        itemCounts[item].totalQty += qty;
-        if (date > itemCounts[item].lastRequested) {
-          itemCounts[item].lastRequested = date;
-        }
-      }
-
-      // Sort by frequency and get top items
-      const topItems = Object.entries(itemCounts)
-        .sort((a, b) => b[1].count - a[1].count)
-        .slice(0, 10)
-        .map(
-          ([item, data]) =>
-            `${item} (${data.count} requests, ${
-              data.totalQty
-            } total units, last: ${data.lastRequested
-              .toISOString()
-              .slice(0, 10)})`
-        )
-        .join("; ");
-
-      return `Items required for ${projectName} (based on ${projectRequests.length} total requests): ${topItems}. This shows the most frequently requested items for this project.`;
-    }
-
-    // ---------------- Item-specific fallback ----------------
-    if (itemName) {
-      const rows = (requestsDf || [])
-        .filter(
-          (r: any) =>
-            normalize(r.item_name) === normalize(itemName) && r.requested_date
-        )
-        .map((r: any) => ({
-          date: new Date(r.requested_date),
-          qty: safeToNumber(r.requested_quantity),
-        }));
-      if (!rows.length)
-        return `No historical requests found for item '${itemName}'.`;
-      const total = rows.reduce((s: any, r: any) => s + r.qty, 0);
-      const last = rows.sort((a, b) => b.date.getTime() - a.date.getTime())[0];
-      // weekly average over last 12 weeks
-      const recentCut = new Date();
-      recentCut.setDate(recentCut.getDate() - 7 * 12);
-      const weekly: Record<string, number> = {};
-      for (const r of rows.filter((d: any) => d.date >= recentCut)) {
-        const monday = new Date(r.date);
-        const day = monday.getDay();
-        const diff = (day + 6) % 7;
-        monday.setDate(monday.getDate() - diff);
-        const key = monday.toISOString().slice(0, 10);
-        weekly[key] = (weekly[key] || 0) + r.qty;
-      }
-      const vals = Object.values(weekly);
-      const recentAvg = vals.length
-        ? vals.reduce((s, v) => s + v, 0) / vals.length
-        : null;
-      const invMatch = (inventoryDf || []).find(
-        (inv: any) => normalize(inv.item_name) === normalize(itemName)
-      );
-      const priceText = invMatch
-        ? invMatch.price || invMatch.unitPrice || invMatch.amount || null
-        : null;
-      let resp = `Item '${itemName}' — Total requested: ${total} units. Most recent request on ${last.date
-        .toISOString()
-        .slice(0, 10)}.`;
-      if (priceText)
-        resp += ` Unit price: ${safeToNumber(priceText).toFixed(2)} Birr.`;
-      if (recentAvg !== null)
-        resp += ` Recent avg weekly demand: ~${recentAvg.toFixed(
-          1
-        )} units (12-week).`;
-      return resp;
-    }
-
-    // If nothing matched clearly, try to provide contextual help
-    if (projectName && !itemName) {
-      return `I detected you're asking about project '${projectName}'. Try: 'What items are required for ${projectName}', 'Summary for ${projectName}', or 'Show unreturned items for ${projectName}'.`;
-    } else if (itemName && !projectName) {
-      return `I detected you're asking about item '${itemName}'. Try: 'Predict next week demand for ${itemName}', 'How much ${itemName} was requested last month', or specify a project like '${itemName} for PROJECT_X'.`;
-    } else {
-      return "I need more specific information. Try asking about:\n• 'What items are required for [PROJECT_NAME]'\n• 'Summary for last month'\n• 'Predict next week demand for [ITEM_NAME]'\n• 'Show unreturned items for [PROJECT_NAME]'\n• 'What items are in critical state'";
+      return "Sorry — the AI service failed to generate a response. Please try asking about a specific item or project.";
     }
   };
 
@@ -662,20 +367,11 @@ export function ChatBot() {
     setLoading(true);
 
     try {
-      let botResponseText = await askChatbot(
-        inputValue,
+      const botResponseText = await askChatbot(
+        newMessage.text,
         inventoryData,
         requestsData
       );
-
-      // Prevent repetitive responses
-      if (botResponseText === lastResponse) {
-        botResponseText +=
-          " (Please rephrase your question if this isn't what you meant.)";
-      }
-
-      setLastResponse(botResponseText);
-
       const botResponse: Message = {
         id: messages.length + 2,
         text: botResponseText,
@@ -686,7 +382,7 @@ export function ChatBot() {
       console.error("Chatbot error:", error);
       const errorResponse: Message = {
         id: messages.length + 2,
-        text: "Sorry, I encountered an error processing your request.",
+        text: "Sorry, a critical error occurred while processing your request.",
         sender: "bot",
       };
       setMessages((prev) => [...prev, errorResponse]);
@@ -701,7 +397,7 @@ export function ChatBot() {
       {!isOpen && (
         <Button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg bg-blue-600 hover:bg-blue-700 z-50"
+          className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg bg-blue-600 hover:bg-blue-700 z-[100]"
           size="icon"
         >
           <MessageCircle className="h-6 w-6 text-white" />
@@ -710,9 +406,9 @@ export function ChatBot() {
 
       {/* Chat Window */}
       {isOpen && (
-        <Card className="fixed bottom-6 right-6 w-96 h-[80vh] shadow-2xl flex flex-col z-50">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 bg-blue-600 text-white">
-            <CardTitle className="text-lg">Chat Assistant</CardTitle>
+        <Card className="fixed bottom-6 right-6 w-96 h-[80vh] max-h-[600px] shadow-2xl flex flex-col z-[100] overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 bg-blue-600 text-white shrink-0">
+            <CardTitle className="text-lg">AI Inventory Assistant</CardTitle>
             <Button
               variant="ghost"
               size="icon"
@@ -722,8 +418,11 @@ export function ChatBot() {
               <X className="h-4 w-4 text-white" />
             </Button>
           </CardHeader>
-          <CardContent className="flex flex-col h-full p-0">
-            <div ref={scrollAreaRef} className="flex-1 p-4 overflow-y-auto">
+          <CardContent className="flex-1 flex flex-col p-0 overflow-hidden min-h-0">
+            <div
+              ref={scrollAreaRef}
+              className="flex-1 p-4 overflow-y-auto min-h-0"
+            >
               <div className="space-y-4">
                 {messages.map((message) => (
                   <div
@@ -762,28 +461,28 @@ export function ChatBot() {
                             style={{ animationDelay: "0.2s" }}
                           ></div>
                         </div>
-                        <span className="text-sm">Thinking...</span>
+                        <span className="text-sm">Analyzing data...</span>
                       </div>
                     </div>
                   </div>
                 )}
               </div>
             </div>
-            <div className="p-4 border-t border-gray-300 bg-white flex-shrink-0">
+            <div className="shrink-0 p-4 border-t border-gray-300 bg-white">
               <div className="flex gap-2">
                 <Input
-                  placeholder="Type your message..."
+                  placeholder="Ask about forecast, stock status, or summary..."
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
-                  onKeyPress={(e) =>
-                    e.key === "Enter" && !loading && handleSend()
-                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !loading) handleSend();
+                  }}
                   disabled={loading}
                 />
                 <Button
                   size="icon"
                   onClick={handleSend}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  className="bg-blue-600 hover:bg-blue-700 text-white shrink-0"
                   disabled={loading}
                 >
                   <Send className="h-4 w-4" />

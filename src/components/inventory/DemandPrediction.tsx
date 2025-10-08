@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TrendingUp } from "lucide-react";
+import { TrendingUp, Briefcase, Package } from "lucide-react";
 import { consumeKafkaTopic, checkKafkaApi } from "@/lib/services/kafkaService";
 import { predictDemand, checkMlApi } from "@/lib/services/mlService";
 
@@ -117,80 +117,121 @@ export function DemandPrediction({ selectedProject }: DemandPredictionProps) {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <TrendingUp className="h-5 w-5" />
+      <CardHeader className="bg-gradient-to-r from-blue-50 to-purple-50 border-b border-blue-100">
+        <CardTitle className="flex items-center gap-3 text-xl font-bold text-gray-800">
+          <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
+            <TrendingUp className="h-6 w-6 text-white" />
+          </div>
           Demand Prediction
           {kafkaStatus && (
-            <span className="ml-3 text-sm text-muted-foreground">Kafka API: <strong>{kafkaStatus}</strong></span>
+            <span className="ml-4 text-sm text-gray-600 bg-white px-2 py-1 rounded-full border">
+              Kafka: <strong className={kafkaStatus.startsWith('ok') ? 'text-green-600' : 'text-red-600'}>{kafkaStatus}</strong>
+            </span>
           )}
           {mlStatus && (
-            <span className="ml-3 text-sm text-muted-foreground">ML API: <strong>{mlStatus}</strong></span>
+            <span className="ml-2 text-sm text-gray-600 bg-white px-2 py-1 rounded-full border">
+              ML: <strong className={mlStatus.startsWith('ok') ? 'text-green-600' : 'text-red-600'}>{mlStatus}</strong>
+            </span>
           )}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Select Project</label>
-            <Select value={selectedPredictionProject} onValueChange={setSelectedPredictionProject}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select project" />
-              </SelectTrigger>
-              <SelectContent>
-                {projectOptions.map((project) => (
-                  <SelectItem key={project} value={project}>
-                    {project}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Select Item</label>
-            <Select value={selectedItem} onValueChange={(value) => {
-              setSelectedItem(value);
-              setPredictedAmount(null);
-            }}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select item" />
-              </SelectTrigger>
-              <SelectContent>
-                {filteredItems.map((item) => (
-                  <SelectItem key={item.name} value={item.name}>
-                    {item.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <Button
-          onClick={handlePredict}
-          disabled={!selectedItem || loading || !selectedPredictionProject || selectedPredictionProject === "No projects available"}
-          className="w-full md:w-auto"
-        >
-          {loading ? "Predicting..." : "Predict"}
-        </Button>
-
-        {predictedAmount !== null && selectedItem && (
-          <div className="mt-6 p-4 rounded-lg border bg-gradient-to-br from-company-primary/5 to-company-primary/10">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Predicted Amount Needed</p>
-                <p className="text-sm font-medium mt-1">{selectedItem}</p>
+      <CardContent className="p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Selection Section */}
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <Briefcase className="h-4 w-4 text-blue-500" />
+                  Select Project
+                </label>
+                <Select value={selectedPredictionProject} onValueChange={setSelectedPredictionProject}>
+                  <SelectTrigger className="h-8 border-2 border-blue-200 hover:border-blue-300 focus:border-blue-400 transition-colors">
+                    <SelectValue placeholder="Choose a project..." />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-32">
+                    {projectOptions.map((project) => (
+                      <SelectItem key={project} value={project}>
+                        {project}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="flex flex-col items-end">
-                <Badge className="text-xl px-4 py-2 bg-company-primary text-company-primary-foreground">
-                  {typeof predictedAmount === 'number' ? Number(predictedAmount).toFixed(2) : predictedAmount} units
-                </Badge>
-                {predictionError && <div className="text-xs text-destructive mt-1">{predictionError}</div>}
+
+              <div className="space-y-3">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <Package className="h-4 w-4 text-green-500" />
+                  Select Item
+                </label>
+                <Select value={selectedItem} onValueChange={(value) => {
+                  setSelectedItem(value);
+                  setPredictedAmount(null);
+                }}>
+                  <SelectTrigger className="h-8 border-2 border-green-200 hover:border-green-300 focus:border-green-400 transition-colors">
+                    <SelectValue placeholder="Choose an item..." />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-32">
+                    {filteredItems.map((item) => (
+                      <SelectItem key={item.name} value={item.name}>
+                        {item.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
+
+            <Button
+              onClick={handlePredict}
+              disabled={!selectedItem || loading || !selectedPredictionProject || selectedPredictionProject === "No projects available"}
+              className="w-full md:w-auto bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold py-2 px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200"
+            >
+              {loading ? (
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Predicting...
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  Predict Demand
+                </div>
+              )}
+            </Button>
           </div>
-        )}
+
+          {/* Prediction Result Section */}
+          <div className="flex items-start justify-center">
+            {predictedAmount !== null && selectedItem ? (
+              <div className="w-full p-6 rounded-xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-purple-50 shadow-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600 font-medium">Predicted Amount Needed</p>
+                    <p className="text-lg font-semibold mt-1 text-gray-800">{selectedItem}</p>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <Badge className="text-2xl px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-bold shadow-md">
+                      {typeof predictedAmount === 'number' ? Number(predictedAmount).toFixed(2) : predictedAmount} units
+                    </Badge>
+                    {predictionError && (
+                      <div className="text-xs text-red-500 mt-2 bg-red-50 px-2 py-1 rounded-md">
+                        ⚠️ {predictionError}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="w-full p-6 rounded-xl border-2 border-gray-200 bg-gray-50 flex items-center justify-center text-gray-500">
+                <div className="text-center">
+                  <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-sm">Select project and item to see prediction</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
