@@ -8,7 +8,6 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recha
 import { useState, useEffect, useMemo } from "react";
 import { ProcessedInventoryItem } from "@/lib/services/dataService";
 import { consumeKafkaTopic } from "@/lib/services/kafkaService";
-import { generateGeminiResponse } from "@/lib/services/LLMService";
 
 interface SmartStockAnalysisProps {
   selectedProject: string;

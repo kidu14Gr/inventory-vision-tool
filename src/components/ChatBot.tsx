@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { consumeKafkaTopic } from "@/lib/services/kafkaService";
-import { generateGeminiResponse } from "@/lib/services/LLMService";
 
 interface Message {
   id: number;
@@ -204,6 +203,93 @@ export function ChatBot() {
 
     return summary;
   };
+
+  // Gemini API configuration
+  const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+  const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent';
+
+  async function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  async function generateGeminiResponse(prompt: string, maxRetries = 3): Promise<string> {
+    if (!GEMINI_API_KEY) {
+      throw new Error('Gemini API key is not configured. Please set VITE_GEMINI_API_KEY in your .env file.');
+    }
+
+    let lastError: Error = new Error('Unknown error');
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        console.log(`Calling Gemini API (attempt ${attempt + 1}/${maxRetries})`);
+
+        const apiUrl = GEMINI_API_URL + `?key=${GEMINI_API_KEY}`;
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: prompt,
+                  },
+                ],
+              },
+            ],
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          const errorMessage = `API request failed with status ${response.status}: ${errorText}`;
+          throw new Error(errorMessage);
+        }
+
+        const data = await response.json();
+
+        if (data.candidates && data.candidates.length > 0 && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts.length > 0) {
+          const content = data.candidates[0].content.parts[0].text;
+          if (content && content.trim()) {
+            return content.trim();
+          }
+        }
+
+        throw new Error('Invalid response format from API');
+
+      } catch (error) {
+        lastError = error as Error;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`Error with Gemini API (attempt ${attempt + 1}/${maxRetries}):`, error);
+
+        // For network errors
+        if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+          if (attempt < maxRetries - 1) {
+            const delayMs = 2000;
+            console.log(`Network error, retrying in ${delayMs}ms...`);
+            await sleep(delayMs);
+            continue;
+          }
+        }
+
+        // For other errors, retry with backoff
+        if (attempt < maxRetries - 1) {
+          const delayMs = Math.pow(2, attempt) * 1000;
+          console.log(`Error occurred, retrying in ${delayMs}ms...`);
+          await sleep(delayMs);
+          continue;
+        }
+
+        // If this was the last attempt, throw the error
+        throw error;
+      }
+    }
+
+    throw lastError;
+  }
 
   const askChatbot = async (
     userQuestion: string,
