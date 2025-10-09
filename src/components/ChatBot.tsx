@@ -86,7 +86,7 @@ export function ChatBot() {
           consumeKafkaTopic("scm_requests", undefined, 5000, "earliest"),
         ]);
         setInventoryData(Array.isArray(inventory) ? inventory : []);
-        setRequestsData(Array.isArray(requests) ? requests : []);
+        setRequestsData(Array.isArray(requests) ? requests.sort((a, b) => new Date(a.requested_date || a.date).getTime() - new Date(b.requested_date || b.date).getTime()) : []);
         console.log(
           `Loaded ${
             Array.isArray(inventory) ? inventory.length : 0
@@ -94,6 +94,14 @@ export function ChatBot() {
             Array.isArray(requests) ? requests.length : 0
           } request records.`
         );
+
+        // Debug: log some sample dates from requests
+        if (Array.isArray(requests) && requests.length > 0) {
+          const dates = requests.map(r => r.requested_date || r.date).filter(Boolean);
+          console.log('Sample request dates:', dates.slice(0, 10));
+          const uniqueDates = [...new Set(dates)];
+          console.log('Unique dates found:', uniqueDates.sort());
+        }
       } catch (error) {
         console.error("Failed to fetch data for chatbot:", error);
         setInventoryData([]);
@@ -164,10 +172,16 @@ export function ChatBot() {
         projectRequests[proj] = (projectRequests[proj] || 0) + 1;
       });
 
+      // Calculate date range
+      const dates = requests.map(r => r.requested_date || r.date).filter(Boolean).map(d => new Date(d).toISOString().slice(0,10)).sort();
+      const minDate = dates.length > 0 ? dates[0] : 'N/A';
+      const maxDate = dates.length > 0 ? dates[dates.length - 1] : 'N/A';
+
       summary.requestStats = {
         totalRequests: requests.length,
         uniqueItems: Object.keys(itemQuantities).length,
         uniqueProjects: Object.keys(projectRequests).length,
+        dateRange: { min: minDate, max: maxDate },
         topItemsByQuantity: Object.entries(itemQuantities)
           .sort(([, a], [, b]) => (b as number) - (a as number))
           .slice(0, 10)
@@ -348,6 +362,7 @@ export function ChatBot() {
       `- Total Requests: ${dataSummary.requestStats.totalRequests || 0}`,
       `- Unique Items: ${dataSummary.requestStats.uniqueItems || 0}`,
       `- Unique Projects: ${dataSummary.requestStats.uniqueProjects || 0}`,
+      `- Date Range: ${dataSummary.requestStats.dateRange?.min || 'N/A'} to ${dataSummary.requestStats.dateRange?.max || 'N/A'}`,
       "",
       "TOP ITEMS BY QUANTITY:",
       JSON.stringify(
