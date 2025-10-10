@@ -117,13 +117,7 @@ export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps)
           }
         });
 
-        const aggregatedInventory = Array.from(aggMap.values()).map(it => {
-          const statusField = viewType === "Amount" ? Number(it.amount || 0) : Number(it.quantity || 0);
-          let status: 'sufficient' | 'low' | 'critical' = 'sufficient';
-          if (statusField <= 5) status = 'critical';
-          else if (statusField <= 20) status = 'low';
-          return { ...it, status } as ProcessedInventoryItem;
-        });
+        const aggregatedInventory = Array.from(aggMap.values());
 
         // Derive inventory project options from aggregated inventory projects
         const invProjects = Array.from(new Set(aggregatedInventory.flatMap(i => i.projects || []).filter(Boolean))).sort();
@@ -137,8 +131,8 @@ export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps)
         // Save raw requests for usage aggregation
         setRequestsList(requestsData);
 
-        // Set the full aggregated inventory data
-        setStockAnalysisData(aggregatedInventory);
+        // Set the full aggregated inventory data (status will be calculated separately based on viewType)
+        setStockAnalysisData(aggregatedInventory.map(it => ({ ...it, status: 'sufficient' as const })));
 
         // For analytics (usage), we will compute aggregates directly from requestsList when rendering
       } catch (error) {
@@ -151,12 +145,22 @@ export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps)
     fetchData();
   }, [inventoryProject, analyticsProject]);
 
+  const stockAnalysisDataWithStatus = useMemo(() => {
+    return stockAnalysisData.map(it => {
+      const statusField = viewType === "Amount" ? Number(it.amount || 0) : Number(it.quantity || 0);
+      let status: 'sufficient' | 'low' | 'critical' = 'sufficient';
+      if (statusField <= 5) status = 'critical';
+      else if (statusField <= 20) status = 'low';
+      return { ...it, status } as ProcessedInventoryItem;
+    });
+  }, [stockAnalysisData, viewType]);
+
   const filteredStockData = useMemo(() => {
-    let filtered = stockAnalysisData;
+    let filtered = stockAnalysisDataWithStatus;
     if (inventoryProject && inventoryProject !== 'all-projects') {
-      filtered = stockAnalysisData.filter(i => (i.projects || []).includes(inventoryProject));
+      filtered = stockAnalysisDataWithStatus.filter(i => (i.projects || []).includes(inventoryProject));
     } else if (inventoryProject === 'all-projects') {
-      filtered = stockAnalysisData.filter(i => i.status === 'critical' || i.status === 'sufficient');
+      filtered = stockAnalysisDataWithStatus.filter(i => i.status === 'critical' || i.status === 'sufficient');
     } else {
       filtered = [];
     }
@@ -166,7 +170,7 @@ export function SmartStockAnalysis({ selectedProject }: SmartStockAnalysisProps)
     }
 
     return filtered;
-  }, [stockAnalysisData, inventoryProject, searchTerm]);
+  }, [stockAnalysisDataWithStatus, inventoryProject, searchTerm]);
 
   const getCurrentStock = (item: ProcessedInventoryItem) => viewType === "Amount" ? item.amount : item.quantity;
   

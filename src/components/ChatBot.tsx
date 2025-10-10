@@ -86,7 +86,15 @@ export function ChatBot() {
           consumeKafkaTopic("scm_requests", undefined, 5000, "earliest"),
         ]);
         setInventoryData(Array.isArray(inventory) ? inventory : []);
-        setRequestsData(Array.isArray(requests) ? requests.sort((a, b) => new Date(a.requested_date || a.date).getTime() - new Date(b.requested_date || b.date).getTime()) : []);
+        setRequestsData(
+          Array.isArray(requests)
+            ? requests.sort(
+                (a, b) =>
+                  new Date(a.requested_date || a.date).getTime() -
+                  new Date(b.requested_date || b.date).getTime()
+              )
+            : []
+        );
         console.log(
           `Loaded ${
             Array.isArray(inventory) ? inventory.length : 0
@@ -97,10 +105,12 @@ export function ChatBot() {
 
         // Debug: log some sample dates from requests
         if (Array.isArray(requests) && requests.length > 0) {
-          const dates = requests.map(r => r.requested_date || r.date).filter(Boolean);
-          console.log('Sample request dates:', dates.slice(0, 10));
+          const dates = requests
+            .map((r) => r.requested_date || r.date)
+            .filter(Boolean);
+          console.log("Sample request dates:", dates.slice(0, 10));
           const uniqueDates = [...new Set(dates)];
-          console.log('Unique dates found:', uniqueDates.sort());
+          console.log("Unique dates found:", uniqueDates.sort());
         }
       } catch (error) {
         console.error("Failed to fetch data for chatbot:", error);
@@ -173,9 +183,13 @@ export function ChatBot() {
       });
 
       // Calculate date range
-      const dates = requests.map(r => r.requested_date || r.date).filter(Boolean).map(d => new Date(d).toISOString().slice(0,10)).sort();
-      const minDate = dates.length > 0 ? dates[0] : 'N/A';
-      const maxDate = dates.length > 0 ? dates[dates.length - 1] : 'N/A';
+      const dates = requests
+        .map((r) => r.requested_date || r.date)
+        .filter(Boolean)
+        .map((d) => new Date(d).toISOString().slice(0, 10))
+        .sort();
+      const minDate = dates.length > 0 ? dates[0] : "N/A";
+      const maxDate = dates.length > 0 ? dates[dates.length - 1] : "N/A";
 
       summary.requestStats = {
         totalRequests: requests.length,
@@ -199,6 +213,7 @@ export function ChatBot() {
         project: r.project_display || r.requested_project_name,
         date: r.requested_date || r.date,
         status: r.status,
+        requester: r.requester_name || "Unknown",
       }));
     }
 
@@ -220,29 +235,37 @@ export function ChatBot() {
 
   // Gemini API configuration
   const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-  const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent';
+  const GEMINI_API_URL =
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent";
 
   async function sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  async function generateGeminiResponse(prompt: string, maxRetries = 3): Promise<string> {
+  async function generateGeminiResponse(
+    prompt: string,
+    maxRetries = 3
+  ): Promise<string> {
     if (!GEMINI_API_KEY) {
-      throw new Error('Gemini API key is not configured. Please set VITE_GEMINI_API_KEY in your .env file.');
+      throw new Error(
+        "Gemini API key is not configured. Please set VITE_GEMINI_API_KEY in your .env file."
+      );
     }
 
-    let lastError: Error = new Error('Unknown error');
+    let lastError: Error = new Error("Unknown error");
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        console.log(`Calling Gemini API (attempt ${attempt + 1}/${maxRetries})`);
+        console.log(
+          `Calling Gemini API (attempt ${attempt + 1}/${maxRetries})`
+        );
 
         const apiUrl = GEMINI_API_URL + `?key=${GEMINI_API_KEY}`;
 
         const response = await fetch(apiUrl, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
             contents: [
@@ -265,22 +288,34 @@ export function ChatBot() {
 
         const data = await response.json();
 
-        if (data.candidates && data.candidates.length > 0 && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts.length > 0) {
+        if (
+          data.candidates &&
+          data.candidates.length > 0 &&
+          data.candidates[0].content &&
+          data.candidates[0].content.parts &&
+          data.candidates[0].content.parts.length > 0
+        ) {
           const content = data.candidates[0].content.parts[0].text;
           if (content && content.trim()) {
             return content.trim();
           }
         }
 
-        throw new Error('Invalid response format from API');
-
+        throw new Error("Invalid response format from API");
       } catch (error) {
         lastError = error as Error;
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error(`Error with Gemini API (attempt ${attempt + 1}/${maxRetries}):`, error);
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        console.error(
+          `Error with Gemini API (attempt ${attempt + 1}/${maxRetries}):`,
+          error
+        );
 
         // For network errors
-        if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+        if (
+          errorMessage.includes("Failed to fetch") ||
+          errorMessage.includes("NetworkError")
+        ) {
           if (attempt < maxRetries - 1) {
             const delayMs = 2000;
             console.log(`Network error, retrying in ${delayMs}ms...`);
@@ -362,7 +397,9 @@ export function ChatBot() {
       `- Total Requests: ${dataSummary.requestStats.totalRequests || 0}`,
       `- Unique Items: ${dataSummary.requestStats.uniqueItems || 0}`,
       `- Unique Projects: ${dataSummary.requestStats.uniqueProjects || 0}`,
-      `- Date Range: ${dataSummary.requestStats.dateRange?.min || 'N/A'} to ${dataSummary.requestStats.dateRange?.max || 'N/A'}`,
+      `- Date Range: ${dataSummary.requestStats.dateRange?.min || "N/A"} to ${
+        dataSummary.requestStats.dateRange?.max || "N/A"
+      }`,
       "",
       "TOP ITEMS BY QUANTITY:",
       JSON.stringify(
@@ -388,7 +425,6 @@ export function ChatBot() {
       "FORMAT RULES (MUST FOLLOW):",
       "- Write in flowing paragraphs like you're speaking to a colleague",
       "- NEVER use asterisks (*) or any markdown formatting",
-      "- NEVER use numbered lists (1. 2. 3.) or bullet points",
       "- NEVER use bold, italics, or special formatting characters",
       "- DO NOT structure responses as lists or sections with headers",
       "- Write naturally as if you're having a conversation",
@@ -400,6 +436,7 @@ export function ChatBot() {
       "- Focus on actionable insights rather than exhaustive details",
       "- Be brief and to the point while remaining conversational",
       "- End with 1-2 key recommendations if relevant",
+      "- When asked about requesters, use the 'requester' field from recent requests data",
       "",
       "EXAMPLE OF GOOD RESPONSE:",
       "Looking at the HQ project, Ethiopian incorporated leads at 180 units, followed by ID Cards at 150 units. Recent patterns show a shift toward construction materials like gypsum and copper pipes, suggesting facility upgrades. I'd recommend keeping stock for your top two items well ahead of demand and monitoring those emerging infrastructure needs.",
