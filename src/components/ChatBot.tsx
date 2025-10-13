@@ -1,6 +1,6 @@
 // src/components/ChatBot.tsx
 import { useState, useEffect, useRef } from "react";
-import { MessageCircle, X, Send } from "lucide-react";
+import { MessageCircle, X, Send, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +11,7 @@ interface Message {
   id: number;
   text: string;
   sender: "user" | "bot";
+  showQuickActions?: boolean;
 }
 
 /* Utility helpers (unchanged behavior) */
@@ -65,18 +66,65 @@ const findItemFromText = (
 
 export function ChatBot() {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 1,
-      text: "Hello! I'm your AI inventory assistant. How can I help you today?",
-      sender: "bot",
-    },
-  ]);
+  const initialMessage = {
+    id: 1,
+    text: "Welcome to your Supply Chain Management AI! I'm here to help you with anything you need on the platform. Start a conversation or ask me about inventory levels, demand forecasting, stock analysis, or any other features.",
+    sender: "bot" as const,
+    showQuickActions: true,
+  };
+  const [messages, setMessages] = useState<Message[]>([initialMessage]);
   const [inputValue, setInputValue] = useState("");
   const [inventoryData, setInventoryData] = useState<any[]>([]);
   const [requestsData, setRequestsData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  const quickActions = [
+    "What are the top requested items?",
+    "Show me low stock items",
+    "What is demand forecasting?",
+    "How do I predict demand?",
+  ];
+
+  const handleQuickAction = async (action: string) => {
+    const newMessage: Message = {
+      id: messages.length + 1,
+      text: action,
+      sender: "user",
+    };
+
+    setMessages((prev) => [...prev, newMessage]);
+    setLoading(true);
+
+    try {
+      const botResponseText = await askChatbot(
+        newMessage.text,
+        inventoryData,
+        requestsData
+      );
+      const botResponse: Message = {
+        id: messages.length + 2,
+        text: botResponseText,
+        sender: "bot",
+      };
+      setMessages((prev) => [...prev, botResponse]);
+    } catch (error) {
+      console.error("Chatbot error:", error);
+      const errorResponse: Message = {
+        id: messages.length + 2,
+        text: "Sorry, a critical error occurred while processing your request.",
+        sender: "bot",
+      };
+      setMessages((prev) => [...prev, errorResponse]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClearChat = () => {
+    setMessages([initialMessage]);
+    setInputValue("");
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -133,30 +181,30 @@ export function ChatBot() {
     return () => clearTimeout(t);
   }, [messages]);
 
-  /* Helper: clean LLM response from markdown formatting */
-  const cleanLLMResponse = (text: string): string => {
-    let cleaned = text;
+  /* Helper: format LLM response to preserve bullets and structure */
+  const formatLLMResponse = (text: string): string => {
+    let formatted = text;
 
-    // Remove asterisks used for bold/emphasis (**text** or *text*)
-    cleaned = cleaned.replace(/\*\*([^*]+)\*\*/g, "$1");
-    cleaned = cleaned.replace(/\*([^*]+)\*/g, "$1");
+    // Remove markdown bold/emphasis but keep the text
+    formatted = formatted.replace(/\*\*([^*]+)\*\*/g, "$1");
+    formatted = formatted.replace(/\*([^*]+)\*/g, "$1");
 
-    // Remove markdown headers (# ## ###)
-    cleaned = cleaned.replace(/^#{1,6}\s+/gm, "");
+    // Remove markdown headers but keep the text
+    formatted = formatted.replace(/^#{1,6}\s+/gm, "");
 
-    // Remove markdown list markers at the start of lines (-, *, •)
-    cleaned = cleaned.replace(/^[\s]*[-*•]\s+/gm, "");
+    // Normalize bullet points to use • consistently
+    formatted = formatted.replace(/^[\s]*[-*]\s+/gm, "• ");
 
-    // Remove numbered list markers (1. 2. 3.)
-    cleaned = cleaned.replace(/^[\s]*\d+\.\s+/gm, "");
+    // Keep numbered lists as is
+    formatted = formatted.replace(/^[\s]*(\d+)\.\s+/gm, "$1. ");
 
-    // Clean up any double spaces created by removals
-    cleaned = cleaned.replace(/  +/g, " ");
+    // Clean up excessive spaces
+    formatted = formatted.replace(/  +/g, " ");
 
     // Clean up excessive line breaks (more than 2 consecutive)
-    cleaned = cleaned.replace(/\n{3,}/g, "\n\n");
+    formatted = formatted.replace(/\n{3,}/g, "\n\n");
 
-    return cleaned.trim();
+    return formatted.trim();
   };
 
   /* Helper: create data summary statistics */
@@ -422,34 +470,40 @@ export function ChatBot() {
       "",
       "CRITICAL RESPONSE GUIDELINES:",
       "",
-      "FORMAT RULES (MUST FOLLOW):",
-      "- Write in flowing paragraphs like you're speaking to a colleague",
-      "- NEVER use asterisks (*) or any markdown formatting",
-      "- NEVER use bold, italics, or special formatting characters",
-      "- DO NOT structure responses as lists or sections with headers",
-      "- Write naturally as if you're having a conversation",
+      "You are a helpful inventory assistant who provides clear, structured insights. Format your responses to be interactive and easy to scan.",
       "",
-      "CONTENT STYLE:",
-      "- Keep responses SHORT and CONCISE (2-3 paragraphs maximum)",
-      "- Start with a direct answer or key insight",
-      "- Weave only the MOST IMPORTANT data points naturally into sentences",
-      "- Focus on actionable insights rather than exhaustive details",
-      "- Be brief and to the point while remaining conversational",
-      "- End with 1-2 key recommendations if relevant",
-      "- When asked about requesters, use the 'requester' field from recent requests data",
+      "FORMATTING REQUIREMENTS:",
+      "- Start with a brief 1-2 sentence summary paragraph",
+      "- Then use bullet points (-) to break down key insights",
+      "- Each bullet should be concise and actionable",
+      "- Use natural, conversational language within bullets",
+      "- NO asterisks, bold, or other markdown except bullets",
+      "- Keep total response length to 4-6 bullet points maximum",
       "",
-      "EXAMPLE OF GOOD RESPONSE:",
-      "Looking at the HQ project, Ethiopian incorporated leads at 180 units, followed by ID Cards at 150 units. Recent patterns show a shift toward construction materials like gypsum and copper pipes, suggesting facility upgrades. I'd recommend keeping stock for your top two items well ahead of demand and monitoring those emerging infrastructure needs.",
+      "CONTENT GUIDELINES:",
+      "- Lead with the most important insight",
+      "- Include specific numbers and item names in bullets",
+      "- Focus on actionable information",
+      "- Mention trends, patterns, or anomalies",
+      "- End with 1-2 recommendations when relevant",
+      "- When asked about requesters, use the 'requester' field from data",
       "",
-      "Now provide your analysis in this natural, conversational style:",
+      "EXAMPLE FORMAT:",
+      "Looking at the HQ project data, here's what stands out:",
+      "- Ethiopian incorporated leads the demand at 180 units, with ID Cards following at 150 units",
+      "- Recent requests show a shift toward construction materials like gypsum and copper pipes, suggesting facility upgrades are underway",
+      "- Your top two items account for 65% of total project demand",
+      "- Recommendation: Keep buffer stock for Ethiopian incorporated and ID Cards at 20% above predicted demand",
+      "",
+      "Now provide your analysis in this clear, bullet-point format:",
     ].join("\n");
 
     // Call AI service
     try {
       const response = await generateGeminiResponse(prompt);
       if (response && response.trim()) {
-        // Clean the response from any markdown formatting
-        return cleanLLMResponse(response);
+        // Format the response to preserve structure
+        return formatLLMResponse(response);
       }
       return "I processed the data, but the AI returned an empty response. Try rephrasing your question or providing a more specific item or project.";
     } catch (e) {
@@ -547,14 +601,25 @@ export function ChatBot() {
         <Card className="fixed bottom-6 right-6 w-96 h-[80vh] max-h-[600px] shadow-2xl flex flex-col z-[100] overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 bg-blue-600 text-white shrink-0">
             <CardTitle className="text-lg">AI Inventory Assistant</CardTitle>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsOpen(false)}
-              className="h-8 w-8 hover:bg-white/20"
-            >
-              <X className="h-4 w-4 text-white" />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleClearChat}
+                className="h-8 w-8 hover:bg-white/20"
+                title="Clear All Chats"
+              >
+                <Trash2 className="h-4 w-4 text-white" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsOpen(false)}
+                className="h-8 w-8 hover:bg-white/20"
+              >
+                <X className="h-4 w-4 text-white" />
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="flex-1 flex flex-col p-0 overflow-hidden min-h-0">
             <div
@@ -562,26 +627,77 @@ export function ChatBot() {
               className="flex-1 p-4 overflow-y-auto min-h-0"
             >
               <div className="space-y-4">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${
-                      message.sender === "user"
-                        ? "justify-end"
-                        : "justify-start"
-                    }`}
-                  >
+                {messages.map((message, msgIndex) => (
+                  <div key={message.id}>
                     <div
-                      className={`max-w-[80%] rounded-lg p-3 max-h-64 overflow-y-auto ${
+                      className={`flex ${
                         message.sender === "user"
-                          ? "bg-blue-600 text-white"
-                          : "bg-gray-200 text-gray-800"
+                          ? "justify-end"
+                          : "justify-start"
                       }`}
                     >
-                      <p className="text-sm whitespace-pre-line">
-                        {message.text}
-                      </p>
+                      <div
+                        className={`max-w-[80%] rounded-lg p-3 max-h-64 overflow-y-auto ${
+                          message.sender === "user"
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-200 text-gray-800"
+                        }`}
+                      >
+                        {message.sender === "bot" ? (
+                          <div className="text-sm space-y-2">
+                            {message.text.split("\n").map((line, idx) => {
+                              const trimmedLine = line.trim();
+                              if (
+                                trimmedLine.startsWith("•") ||
+                                trimmedLine.match(/^\d+\./)
+                              ) {
+                                return (
+                                  <div
+                                    key={idx}
+                                    className="flex items-start gap-2 ml-2"
+                                  >
+                                    <span className="text-blue-600 font-bold flex-shrink-0 mt-0.5">
+                                      {trimmedLine.startsWith("•")
+                                        ? "•"
+                                        : trimmedLine.match(/^\d+\./)?.[0]}
+                                    </span>
+                                    <span className="flex-1">
+                                      {trimmedLine.replace(/^[•\d.]\s*/, "")}
+                                    </span>
+                                  </div>
+                                );
+                              }
+                              return trimmedLine ? (
+                                <p key={idx} className="leading-relaxed">
+                                  {line}
+                                </p>
+                              ) : null;
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-sm whitespace-pre-line">
+                            {message.text}
+                          </p>
+                        )}
+                      </div>
                     </div>
+                    {/* Quick Action Buttons - Show only for initial message */}
+                    {message.showQuickActions &&
+                      msgIndex === 0 &&
+                      messages.length === 1 && (
+                        <div className="mt-4 grid grid-cols-2 gap-2 px-2">
+                          {quickActions.map((action, idx) => (
+                            <button
+                              key={idx}
+                              onClick={() => handleQuickAction(action)}
+                              disabled={loading}
+                              className="text-xs px-3 py-2 border-2 border-dashed border-gray-400 rounded-lg bg-white text-gray-700 hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-left font-medium"
+                            >
+                              {action}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                   </div>
                 ))}
                 {loading && (
