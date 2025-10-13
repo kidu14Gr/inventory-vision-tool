@@ -68,7 +68,7 @@ export function ChatBot() {
   const [isOpen, setIsOpen] = useState(false);
   const initialMessage = {
     id: 1,
-    text: "Welcome to your Supply Chain Management AI! I'm here to help you with anything you need on the platform. Start a conversation or ask me about inventory levels, demand forecasting, stock analysis, or any other features.",
+    text: "Welcome to your Supply Chain Management AI! I'm here to help you with anything you need on the platform.",
     sender: "bot" as const,
     showQuickActions: true,
   };
@@ -83,7 +83,7 @@ export function ChatBot() {
     "What are the top requested items?",
     "Show me low stock items",
     "What is demand forecasting?",
-    "How do I predict demand?",
+    "Summarize last month's demand?",
   ];
 
   const handleQuickAction = async (action: string) => {
@@ -434,32 +434,39 @@ export function ChatBot() {
     // Compose LLM prompt with summarized data
     const prompt = [
       "You are an expert Supply Chain Analyst AI assistant. Your role is to provide insightful, conversational analysis of inventory and supply chain data.",
-      `CURRENT DATE: ${new Date().toISOString().slice(0, 10)}`,
+      `CURRENT DATE (TODAY): ${new Date().toISOString().slice(0, 10)}`,
       "",
       "--- USER QUESTION ---",
       qRaw,
       "",
+      "--- IMPORTANT: CHECK DATES CAREFULLY ---",
+      "The data below includes 'date' fields. When user asks about specific time periods (last week, this month, etc.):",
+      "1. Calculate the exact date range based on CURRENT DATE above",
+      "2. Filter the RECENT REQUESTS data by the 'date' field",
+      "3. If NO records match the date range, respond with 'No demand/requests found for [period]'",
+      "4. NEVER use overall statistics when asked about a specific time period",
+      "",
       "--- DATA SUMMARY ---",
       "",
-      "REQUEST STATISTICS:",
+      "REQUEST STATISTICS (OVERALL - Use only if no time period specified):",
       `- Total Requests: ${dataSummary.requestStats.totalRequests || 0}`,
       `- Unique Items: ${dataSummary.requestStats.uniqueItems || 0}`,
       `- Unique Projects: ${dataSummary.requestStats.uniqueProjects || 0}`,
-      `- Date Range: ${dataSummary.requestStats.dateRange?.min || "N/A"} to ${
-        dataSummary.requestStats.dateRange?.max || "N/A"
-      }`,
+      `- Date Range in Data: ${
+        dataSummary.requestStats.dateRange?.min || "N/A"
+      } to ${dataSummary.requestStats.dateRange?.max || "N/A"}`,
       "",
-      "TOP ITEMS BY QUANTITY:",
+      "TOP ITEMS BY QUANTITY (OVERALL):",
       JSON.stringify(
         dataSummary.requestStats.topItemsByQuantity || [],
         null,
         2
       ),
       "",
-      "TOP PROJECTS:",
+      "TOP PROJECTS (OVERALL):",
       JSON.stringify(dataSummary.requestStats.topProjects || [], null, 2),
       "",
-      "RECENT REQUESTS (Last 50):",
+      "RECENT REQUESTS WITH DATES (Last 50 - FILTER BY DATE FOR TIME-BASED QUERIES):",
       JSON.stringify(dataSummary.recentRequests || [], null, 2),
       "",
       "INVENTORY STATUS:",
@@ -470,32 +477,37 @@ export function ChatBot() {
       "",
       "CRITICAL RESPONSE GUIDELINES:",
       "",
-      "You are a helpful inventory assistant who provides clear, structured insights. Format your responses to be interactive and easy to scan.",
+      "You are a concise AI assistant. Provide SHORT, scannable insights using ONLY bullet points.",
       "",
-      "FORMATTING REQUIREMENTS:",
-      "- Start with a brief 1-2 sentence summary paragraph",
-      "- Then use bullet points (-) to break down key insights",
-      "- Each bullet should be concise and actionable",
-      "- Use natural, conversational language within bullets",
-      "- NO asterisks, bold, or other markdown except bullets",
-      "- Keep total response length to 4-6 bullet points maximum",
+      "STRICT FORMATTING RULES:",
+      "- NEVER write paragraphs or long explanations",
+      "- Use ONLY bullet points (-) for every line",
+      "- Keep EACH bullet to 1 short sentence (10-15 words max)",
+      "- Total response: 3-5 bullets ONLY",
+      "- NO introduction text, NO summary paragraphs",
+      "- Start immediately with bullets",
       "",
-      "CONTENT GUIDELINES:",
-      "- Lead with the most important insight",
-      "- Include specific numbers and item names in bullets",
-      "- Focus on actionable information",
-      "- Mention trends, patterns, or anomalies",
-      "- End with 1-2 recommendations when relevant",
-      "- When asked about requesters, use the 'requester' field from data",
+      "DATE-BASED QUERIES (VERY IMPORTANT):",
+      "- ALWAYS use the 'date' or 'requested_date' field to filter data by time periods",
+      "- When asked about 'last week', 'this month', 'yesterday', etc., calculate the exact date range",
+      "- If NO data exists in the requested time period, say 'No demand/requests found for [time period]'",
+      "- NEVER provide overall statistics when asked about a specific time period",
+      "- Example: If asked 'last week demand' but data is from last month, respond with 'No demand recorded for last week'",
       "",
-      "EXAMPLE FORMAT:",
-      "Looking at the HQ project data, here's what stands out:",
-      "- Ethiopian incorporated leads the demand at 180 units, with ID Cards following at 150 units",
-      "- Recent requests show a shift toward construction materials like gypsum and copper pipes, suggesting facility upgrades are underway",
-      "- Your top two items account for 65% of total project demand",
-      "- Recommendation: Keep buffer stock for Ethiopian incorporated and ID Cards at 20% above predicted demand",
+      "CONTENT RULES:",
+      "- First bullet: Key finding with specific number (or 'No data found' if applicable)",
+      "- Middle bullets: Important insights with data",
+      "- Last bullet: One actionable recommendation",
+      "- Use exact item names and quantities",
+      "- Be direct and specific",
       "",
-      "Now provide your analysis in this clear, bullet-point format:",
+      "EXAMPLE (COPY THIS STYLE):",
+      "- Ethiopian incorporated leads at 180 units, ID Cards at 150 units",
+      "- Construction materials (gypsum, copper) trending up 40% this month",
+      "- Top 2 items represent 65% of total demand",
+      "- Recommend: Stock buffer 20% above forecast for peak items",
+      "",
+      "Now respond with 3-5 short bullets only:",
     ].join("\n");
 
     // Call AI service
@@ -589,46 +601,51 @@ export function ChatBot() {
       {!isOpen && (
         <Button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg bg-blue-600 hover:bg-blue-700 z-[100]"
+          className="fixed bottom-6 right-6 h-16 w-16 rounded-full shadow-2xl bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 hover:shadow-blue-500/50 hover:scale-110 transition-all duration-300 z-[100] border-2 border-white"
           size="icon"
         >
-          <MessageCircle className="h-6 w-6 text-white" />
+          <MessageCircle className="h-7 w-7 text-white" />
         </Button>
       )}
 
       {/* Chat Window */}
       {isOpen && (
-        <Card className="fixed bottom-6 right-6 w-96 h-[80vh] max-h-[600px] shadow-2xl flex flex-col z-[100] overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 bg-blue-600 text-white shrink-0">
-            <CardTitle className="text-lg">AI Inventory Assistant</CardTitle>
+        <Card className="fixed bottom-6 right-6 w-96 h-[80vh] max-h-[600px] shadow-2xl flex flex-col z-[100] overflow-hidden rounded-2xl border-2 border-gray-200 backdrop-blur-xl bg-white/95">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 bg-gradient-to-r from-white/80 to-gray-50/80 backdrop-blur-md border-b border-gray-200/50 shrink-0">
+            <CardTitle className="text-lg font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+              AI Inventory Assistant
+            </CardTitle>
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={handleClearChat}
-                className="h-8 w-8 hover:bg-white/20"
+                className="h-8 w-8 hover:bg-gray-200/50 rounded-full transition-all duration-200 group"
                 title="Clear All Chats"
               >
-                <Trash2 className="h-4 w-4 text-white" />
+                <Trash2 className="h-4 w-4 text-gray-600 group-hover:text-red-500 transition-colors" />
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => setIsOpen(false)}
-                className="h-8 w-8 hover:bg-white/20"
+                className="h-8 w-8 hover:bg-gray-200/50 rounded-full transition-all duration-200 group"
               >
-                <X className="h-4 w-4 text-white" />
+                <X className="h-4 w-4 text-gray-600 group-hover:text-gray-900 transition-colors" />
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="flex-1 flex flex-col p-0 overflow-hidden min-h-0">
+          <CardContent className="flex-1 flex flex-col p-0 overflow-hidden min-h-0 bg-gradient-to-br from-gray-50 to-white">
             <div
               ref={scrollAreaRef}
               className="flex-1 p-4 overflow-y-auto min-h-0"
             >
               <div className="space-y-4">
                 {messages.map((message, msgIndex) => (
-                  <div key={message.id}>
+                  <div
+                    key={message.id}
+                    className="animate-in fade-in slide-in-from-bottom-4 duration-300"
+                  >
                     <div
                       className={`flex ${
                         message.sender === "user"
@@ -637,38 +654,52 @@ export function ChatBot() {
                       }`}
                     >
                       <div
-                        className={`max-w-[80%] rounded-lg p-3 max-h-64 overflow-y-auto ${
+                        className={`max-w-[80%] rounded-2xl p-4 max-h-64 overflow-y-auto shadow-md transition-all duration-200 hover:shadow-lg ${
                           message.sender === "user"
-                            ? "bg-blue-600 text-white"
-                            : "bg-gray-200 text-gray-800"
+                            ? "bg-gradient-to-br from-blue-500 to-purple-600 text-white"
+                            : "bg-white border border-gray-200 text-gray-800"
                         }`}
                       >
                         {message.sender === "bot" ? (
-                          <div className="text-sm space-y-2">
+                          <div className="text-sm space-y-3">
                             {message.text.split("\n").map((line, idx) => {
                               const trimmedLine = line.trim();
                               if (
                                 trimmedLine.startsWith("•") ||
+                                trimmedLine.startsWith("-") ||
                                 trimmedLine.match(/^\d+\./)
                               ) {
                                 return (
                                   <div
                                     key={idx}
-                                    className="flex items-start gap-2 ml-2"
+                                    className="flex items-start gap-3 group hover:bg-blue-50/50 p-2 rounded-lg transition-all duration-200"
                                   >
-                                    <span className="text-blue-600 font-bold flex-shrink-0 mt-0.5">
-                                      {trimmedLine.startsWith("•")
-                                        ? "•"
-                                        : trimmedLine.match(/^\d+\./)?.[0]}
+                                    <span className="flex-shrink-0 mt-1">
+                                      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 shadow-md group-hover:shadow-lg group-hover:scale-110 transition-all duration-200">
+                                        <svg
+                                          className="w-3 h-3 text-white"
+                                          fill="currentColor"
+                                          viewBox="0 0 20 20"
+                                        >
+                                          <path
+                                            fillRule="evenodd"
+                                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                            clipRule="evenodd"
+                                          />
+                                        </svg>
+                                      </span>
                                     </span>
-                                    <span className="flex-1">
-                                      {trimmedLine.replace(/^[•\d.]\s*/, "")}
+                                    <span className="flex-1 leading-relaxed text-gray-700 pt-0.5">
+                                      {trimmedLine.replace(/^[•\-\d.]\s*/, "")}
                                     </span>
                                   </div>
                                 );
                               }
                               return trimmedLine ? (
-                                <p key={idx} className="leading-relaxed">
+                                <p
+                                  key={idx}
+                                  className="leading-relaxed text-gray-700 pl-2"
+                                >
                                   {line}
                                 </p>
                               ) : null;
@@ -685,15 +716,17 @@ export function ChatBot() {
                     {message.showQuickActions &&
                       msgIndex === 0 &&
                       messages.length === 1 && (
-                        <div className="mt-4 grid grid-cols-2 gap-2 px-2">
+                        <div className="mt-4 grid grid-cols-2 gap-3 px-2">
                           {quickActions.map((action, idx) => (
                             <button
                               key={idx}
                               onClick={() => handleQuickAction(action)}
                               disabled={loading}
-                              className="text-xs px-3 py-2 border-2 border-dashed border-gray-400 rounded-lg bg-white text-gray-700 hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-left font-medium"
+                              className="text-xs px-4 py-3 border-2 border-dashed border-blue-300 rounded-xl bg-white text-gray-700 hover:border-blue-500 hover:text-blue-600 hover:bg-gradient-to-br hover:from-blue-50 hover:to-purple-50 hover:shadow-md hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-left font-medium group"
                             >
-                              {action}
+                              <span className="group-hover:translate-x-1 inline-block transition-transform duration-200">
+                                {action}
+                              </span>
                             </button>
                           ))}
                         </div>
@@ -701,46 +734,62 @@ export function ChatBot() {
                   </div>
                 ))}
                 {loading && (
-                  <div className="flex justify-start">
-                    <div className="bg-gray-200 text-gray-800 rounded-lg p-3 max-w-[80%]">
-                      <div className="flex items-center space-x-2">
+                  <div className="flex justify-start animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <div className="bg-white border border-gray-200 text-gray-800 rounded-2xl p-4 max-w-[80%] shadow-md">
+                      <div className="flex items-center space-x-3">
                         <div className="flex space-x-1">
-                          <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                          <div className="w-2.5 h-2.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-bounce"></div>
                           <div
-                            className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                            className="w-2.5 h-2.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full animate-bounce"
                             style={{ animationDelay: "0.1s" }}
                           ></div>
                           <div
-                            className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                            className="w-2.5 h-2.5 bg-gradient-to-r from-pink-500 to-blue-500 rounded-full animate-bounce"
                             style={{ animationDelay: "0.2s" }}
                           ></div>
                         </div>
-                        <span className="text-sm">Analyzing data...</span>
+                        <span className="text-sm font-medium bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                          Analyzing data...
+                        </span>
                       </div>
                     </div>
                   </div>
                 )}
               </div>
             </div>
-            <div className="shrink-0 p-4 border-t border-gray-300 bg-white">
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Ask about forecast, stock status, or summary..."
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !loading) handleSend();
-                  }}
-                  disabled={loading}
-                />
-                <Button
-                  size="icon"
-                  onClick={handleSend}
-                  className="bg-blue-600 hover:bg-blue-700 text-white shrink-0"
-                  disabled={loading}
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
+            <div className="shrink-0 border-t border-gray-200/50 bg-gradient-to-r from-white/80 to-gray-50/80 backdrop-blur-md">
+              <div className="p-4">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Ask about forecast, stock status, or summary..."
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !loading) handleSend();
+                    }}
+                    disabled={loading}
+                    className="border-2 border-gray-200 focus:border-blue-400 rounded-xl bg-white shadow-sm focus:shadow-md transition-all duration-200"
+                  />
+                  <Button
+                    size="icon"
+                    onClick={handleSend}
+                    className="bg-gradient-to-br from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shrink-0 rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200"
+                    disabled={loading}
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div className="px-4 pb-3">
+                <div className="flex items-start gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                  <span className="text-amber-500 font-bold flex-shrink-0">
+                    ⚠️
+                  </span>
+                  <span className="leading-relaxed">
+                    The chatbot may make mistakes due to limited or low-quality
+                    data.
+                  </span>
+                </div>
               </div>
             </div>
           </CardContent>
