@@ -401,6 +401,72 @@ export function ChatBot() {
       return "Hi! I can help you analyze inventory levels, forecast demand, summarize project usage, and provide stock insights. What would you like to know?";
     }
 
+    // Check if question is completely unrelated to inventory/supply chain
+    const inventoryKeywords = [
+      "inventory",
+      "stock",
+      "item",
+      "request",
+      "demand",
+      "supply",
+      "warehouse",
+      "quantity",
+      "forecast",
+      "project",
+      "usage",
+      "consumption",
+      "available",
+      "low stock",
+      "top item",
+      "predict",
+      "trend",
+      "last week",
+      "last month",
+      "this month",
+      "summary",
+      "summarize",
+      "analyze",
+      "how much",
+      "how many",
+    ];
+
+    const hasInventoryKeyword = inventoryKeywords.some((keyword) =>
+      q.includes(keyword)
+    );
+
+    // Check if it looks like a general knowledge question
+    const generalQuestionPatterns = [
+      /who is|who are|what is|what are|where is|where are/i,
+      /ceo|founder|president|company|organization|corporation/i,
+      /definition|meaning|explain|describe/i,
+    ];
+
+    const isGeneralQuestion = generalQuestionPatterns.some((pattern) =>
+      pattern.test(q)
+    );
+
+    // If it's a general question with no inventory keywords, handle it as general query
+    if (isGeneralQuestion && !hasInventoryKeyword) {
+      const generalPrompt = [
+        "You are a helpful AI assistant. Answer the following question concisely using your general knowledge.",
+        "Provide a brief, accurate response in 2-3 short bullet points.",
+        "",
+        "Question:",
+        qRaw,
+        "",
+        "Response format: Use bullet points (-) starting immediately, no introduction.",
+      ].join("\n");
+
+      try {
+        const response = await generateGeminiResponse(generalPrompt);
+        return response
+          ? formatLLMResponse(response)
+          : "I'm sorry, I couldn't generate a response. Please try again.";
+      } catch (e) {
+        return "I'm having trouble answering that question. As an inventory assistant, I'm best at helping with supply chain and inventory-related queries.";
+      }
+    }
+
     // Entity extraction
     const projectName = findProjectFromText(qRaw, requestsDf);
     const itemName = findItemFromText(qRaw, requestsDf, inventoryDf);
@@ -440,11 +506,24 @@ export function ChatBot() {
       qRaw,
       "",
       "--- IMPORTANT: CHECK DATES CAREFULLY ---",
-      "The data below includes 'date' fields. When user asks about specific time periods (last week, this month, etc.):",
-      "1. Calculate the exact date range based on CURRENT DATE above",
-      "2. Filter the RECENT REQUESTS data by the 'date' field",
-      "3. If NO records match the date range, respond with 'No demand/requests found for [period]'",
-      "4. NEVER use overall statistics when asked about a specific time period",
+      "The data below includes 'date' fields. When user asks about time periods:",
+      "",
+      "RELATIVE TIME CALCULATIONS (based on CURRENT DATE above):",
+      "- 'last month' = previous month (e.g., if today is Oct 2025, last month = September 2025, ANY date in Sept)",
+      "- 'last week' = 7 days before today",
+      "- 'this month' = current month (e.g., if today is Oct 13, 2025, this month = Oct 2025, ANY date in Oct)",
+      "- 'last 2 months' = previous 2 full months (e.g., Aug-Sept if today is in Oct)",
+      "",
+      "MONTH NAME QUERIES:",
+      "- 'September', 'Sept', 'January', etc. = ANY date within that month",
+      "- Month names and relative terms (last month) should give SAME results if they refer to same month",
+      "",
+      "FILTERING INSTRUCTIONS:",
+      "1. Look at the 'date' field in RECENT REQUESTS data below",
+      "2. Filter records where the date falls within the requested period",
+      "3. If records exist, summarize ONLY those records",
+      "4. If NO records match, respond: 'No demand/requests found for [period]'",
+      "5. Be consistent: 'last month' and the actual month name should give identical results",
       "",
       "--- DATA SUMMARY ---",
       "",
@@ -488,11 +567,13 @@ export function ChatBot() {
       "- Start immediately with bullets",
       "",
       "DATE-BASED QUERIES (VERY IMPORTANT):",
-      "- ALWAYS use the 'date' or 'requested_date' field to filter data by time periods",
-      "- When asked about 'last week', 'this month', 'yesterday', etc., calculate the exact date range",
-      "- If NO data exists in the requested time period, say 'No demand/requests found for [time period]'",
+      "- ALWAYS use the 'date' field from the data to filter by time periods",
+      "- Calculate date ranges carefully based on CURRENT DATE provided above",
+      "- 'Last month' and the actual previous month name should give IDENTICAL results",
+      "- Example: If current date is Oct 13, 2025, then 'last month' = 'September' = ANY date in Sept 2025",
+      "- Look for ANY records where the date falls within the month, not exact date ranges",
+      "- If NO data exists in requested period, say 'No demand/requests found for [period]'",
       "- NEVER provide overall statistics when asked about a specific time period",
-      "- Example: If asked 'last week demand' but data is from last month, respond with 'No demand recorded for last week'",
       "",
       "CONTENT RULES:",
       "- First bullet: Key finding with specific number (or 'No data found' if applicable)",
@@ -501,11 +582,18 @@ export function ChatBot() {
       "- Use exact item names and quantities",
       "- Be direct and specific",
       "",
-      "EXAMPLE (COPY THIS STYLE):",
-      "- Ethiopian incorporated leads at 180 units, ID Cards at 150 units",
-      "- Construction materials (gypsum, copper) trending up 40% this month",
-      "- Top 2 items represent 65% of total demand",
+      "EXAMPLE RESPONSES (COPY THIS STYLE):",
+      "",
+      "Good response for 'September requests' OR 'last month' (when Sept is last month):",
+      "- Ethiopian incorporated leads at 180 units, ID Cards at 150 units in September",
+      "- Construction materials (gypsum, copper) trending up 40% in September",
+      "- Top 2 items represent 65% of September demand",
       "- Recommend: Stock buffer 20% above forecast for peak items",
+      "",
+      "Good response when NO data found:",
+      "- No demand/requests found for last week",
+      "- Data available shows requests from August-September only",
+      "- Recommend: Check back when more recent data is available",
       "",
       "Now respond with 3-5 short bullets only:",
     ].join("\n");
